@@ -4,6 +4,8 @@ import {RootNote, SubNote} from './note.js'
 import JSONCrush from 'https://unpkg.com/jsoncrush'
 import {stage, grid, rootlayer} from './sequencer.js'
 
+const HZ_MUL = 16
+
 export class Serializer {
 	static serialize(savegrid) {
 		const s = savegrid ? {
@@ -26,7 +28,7 @@ export class Serializer {
 		return {
 			x: Math.round(note.x() * 4),
 			l: Math.round(note.len * 4),
-			h: Math.round(note.hz * 16),
+			h: Math.round(note.hz * HZ_MUL),
 			m: note.mute,
 			v: note.volume - 50,
 			s: note.childNotes.children.map(x => this.sub2json(x))
@@ -37,7 +39,7 @@ export class Serializer {
 			i: note.interval.id,
 			d: Math.round(note.delay * 4),
 			l: Math.round(note.len * 4),
-			h: Math.round(note._hz * 16),
+			h: Math.round(note._hz * HZ_MUL),
 			m: note.mute,
 			v: note.volume - 50,
 			s: note.childNotes.children.map(x => this.sub2json(x))
@@ -45,7 +47,10 @@ export class Serializer {
 	}
 
 	static deserialize(d) {
-		const u = JSON.parse(JSONCrush.uncrush(decodeURIComponent(d)))
+//	    Support both raw JSON (.naf file) and URL-encoded (share links) formats.
+		let u
+		try { u = JSON.parse(d) }
+		catch { u = JSON.parse(JSONCrush.uncrush(decodeURIComponent(d))) }
 		console.log("loading", u)
 		
 		if (u.s) {
@@ -64,7 +69,7 @@ export class Serializer {
 	}
 	
 	static json2root(n) {
-		const p = new RootNote(stage, n.x / 4 || 0, hz2y(n.h / 16), n.l / 4)
+		const p = new RootNote(stage, n.x / 4 || 0, hz2y(n.h / HZ_MUL), n.l / 4)
 		p.mute = n.m || false
 		p.volume = 50 + (n.v || 0)
 		rootlayer.add(p)
@@ -75,10 +80,15 @@ export class Serializer {
 	}
 	
 	static json2sub(p, m) {
-		const q = p.addNote(m.l / 4, pitchIntervals[(m.i || 0) + "d"], m.d / 4 || 0)
+        //Add safety checks to skip the sub-note directly when encountering an invalid interval, preventing crashes.
+		const id = m.i || 0
+		const key = id + 'd'
+		const interval = pitchIntervals[key]
+		if (!interval) return
+		const q = p.addNote(m.l / 4, interval, m.d / 4 || 0)
 		q.mute = m.m || false
 		q.volume = 50 + (m.v || 0)
-		if (m.h) q.hz = m.h / 16
+		if (m.h) q.hz = m.h / HZ_MUL
 		for (const l of m.s || []) {
 			this.json2sub(q, l)
 		}
