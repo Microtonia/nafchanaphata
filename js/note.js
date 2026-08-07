@@ -115,7 +115,7 @@ export class Note extends Konva.Group {
 		})
 		this.delay = delay
 		this._len = len
-		this._tick = tick || parseInt($('#config-tick').value) || 1  // 记录创建时的分辨率，拖拽时保持一致的量化行为
+		this._tick = tick || parseInt($('#config-tick').value) || 1  // 仅用于序列化，拖拽时始终读取当前 config-tick
 		this._interval = interval
 		this.volume = 50
 		this.isMuted = false
@@ -381,21 +381,22 @@ export class RootNote extends Note {
 		// ドラッグ移動ハンドラ：モードに応じて位置/長さをリアルタイム更新、Ctrl コード連動と Shift チェーンをサポート
 		// Drag move handler: update position/length in real time per mode, supports Ctrl chord sync and Shift chaining
 		.on('dragmove', e => {
+			const curTick = parseInt($('#config-tick').value) || 1
 			switch (this.stage.dragMode) {
 				case 'head':
-					this.len = Math.max(10, this.origTailX - qh(this.x(), this._tick))
-					this.x(qh(this.x(), this._tick))
+					this.len = Math.max(10, this.origTailX - qh(this.x(), curTick))
+					this.x(qh(this.x(), curTick))
 					this.y(this.origY)
 					// Ctrl：头部拖动时所有子音符等量缩短
 					if (this._ctrlChordDrag && this._ctrlSubs) {
-						const d = qh(this.x(), this._tick) - qh(this.origX, this._tick)
+						const d = qh(this.x(), curTick) - qh(this.origX, curTick)
 						for (const s of this._ctrlSubs) {
 							s.note.len = Math.max(10, s.origLen - d)
 						}
 					}
 					break
 				case 'tail':
-					this.len = Math.max(10, qt(this.stage.getRelativePointerPosition().x, this._tick) - this.origX)
+					this.len = Math.max(10, qt(this.stage.getRelativePointerPosition().x, curTick) - this.origX)
 					this.x(this.origX)
 					this.y(this.origY)
 					if (this._ctrlChordDrag && this._ctrlSubs) {
@@ -411,7 +412,7 @@ export class RootNote extends Note {
 					}
 					break
 				case 'body':
-					this.x(qh(this.x(), this._tick))
+					this.x(qh(this.x(), curTick))
 					this.y(this.y())
 					this.quantize()
 					// Ctrl 模式下 body 拖拽根音：子音自动跟随（它们相对根音定位），无需额外处理
@@ -620,16 +621,17 @@ export class SubNote extends Note {
 			if (this._ctrlChordDrag) {
 				const ptr = this.stage.getRelativePointerPosition()
 				const deltaX = ptr.x - this._ctrlStartPtrX
+				const curTick = parseInt($('#config-tick').value) || 1
 				switch (this.stage.dragMode) {
 					case 'body':
 						// 整体平移：移动根音
-						this.root.x(qh(this._ctrlOrigRootX + deltaX, this.root._tick))
+						this.root.x(qh(this._ctrlOrigRootX + deltaX, curTick))
 						this.pitchline.x(this.origX)
 						this.pitchline.y(0)
 						break
 					case 'head': {
-						const d = qh(deltaX, this.root._tick)
-						this.root.x(qh(this._ctrlOrigRootX + d, this.root._tick))
+						const d = qh(deltaX, curTick)
+						this.root.x(qh(this._ctrlOrigRootX + d, curTick))
 						this.root.len = Math.max(10, this._ctrlOrigRootLen - d)
 						this.pitchline.x(this.origX)
 						this.pitchline.y(0)
@@ -639,7 +641,7 @@ export class SubNote extends Note {
 						break
 					}
 					case 'tail': {
-						const subLen = Math.max(10, qt(this.link.getRelativePointerPosition().x, this.root._tick) - this.origX)
+						const subLen = Math.max(10, qt(this.link.getRelativePointerPosition().x, curTick) - this.origX)
 						const ratio = subLen / (this.origLen || 1)
 						this.root.len = Math.max(10, Math.round(this._ctrlOrigRootLen * ratio))
 						this.pitchline.x(this.origX)
@@ -651,19 +653,20 @@ export class SubNote extends Note {
 					}
 				}
 			} else {
+				const curTick = parseInt($('#config-tick').value) || 1
 				switch (this.stage.dragMode) {
 					case 'head':
-						this.len = Math.max(10, this.origTailX - qh(this.pitchline.x(), this._tick))
-						this.pitchline.x(qh(this.pitchline.x(), this._tick))
+						this.len = Math.max(10, this.origTailX - qh(this.pitchline.x(), curTick))
+						this.pitchline.x(qh(this.pitchline.x(), curTick))
 						this.pitchline.y(0)
 						break
 					case 'tail':
-						this.len = Math.max(10, qt(this.link.getRelativePointerPosition().x, this._tick) - this.origX)
+						this.len = Math.max(10, qt(this.link.getRelativePointerPosition().x, curTick) - this.origX)
 						this.pitchline.x(this.origX)
 						this.pitchline.y(0)
 						break
 					case 'body':
-						this.pitchline.x(qh(this.pitchline.x(), this._tick))
+						this.pitchline.x(qh(this.pitchline.x(), curTick))
 						this.pitchline.y(0)
 						this.quantize()
 						// 选中组整体拖动

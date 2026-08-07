@@ -107,6 +107,12 @@ const tr = {
 		"custom": "カスタム",
 		"add-dim": "+ 追加",
 		"promote": "ルートに昇格",
+		"chord-connect": "コード接続",
+		"chord-connect-title": "コード接続",
+		"chord-connect-use": "使用次元：",
+		"chord-connect-error": "誤差 (cents)",
+		"chord-connect-max-steps": "最大ステップ",
+		"chord-connect-calc": "接続開始",
 		"help-content": `<h4>再生</h4>
 <p><kbd>Space</kbd> — 再生 / 停止</p>
 <p><kbd>Skip</kbd> ボタン — 先頭に戻る</p>
@@ -184,7 +190,13 @@ const tr = {
 <p>倍音（3/5/7/11）を選択し、各種の最大使用回数を設定</p>
 <p>目標音高、誤差（cents）、最大ステップ数を設定</p>
 <p>計算開始 — 選択したルート音に次元を再帰追加して目標音高に近似</p>
-<p>オクターブは常に使用可能（倍音選択に関わらず）</p>`
+<p>オクターブは常に使用可能（倍音選択に関わらず）</p>
+<h4>コード接続</h4>
+<p>音符を選択 → <kbd>V</kbd> キー</p>
+<p>使用する次元（1d〜7d）を選択、オクターブは常時使用可能</p>
+<p>誤差（cents）と最大ステップ数を設定</p>
+<p>接続開始 — 同じ開始時刻・音価の音符を次元経路で接続しコード化</p>
+<p>中継音（経路上の中間ノート）は破線で表示</p>`
 	},
 	'en': {
 		"prog": "[Progress]",
@@ -263,6 +275,12 @@ const tr = {
 		"custom": "Custom",
 		"add-dim": "+ Add",
 		"promote": "Promote to Root",
+		"chord-connect": "Chord Connect",
+		"chord-connect-title": "Chord Connect",
+		"chord-connect-use": "Use dimensions:",
+		"chord-connect-error": "Error (cents)",
+		"chord-connect-max-steps": "Max steps",
+		"chord-connect-calc": "Connect",
 		"help-content": `<h4>Playback</h4>
 <p><kbd>Space</kbd> — Play / Pause</p>
 <p><kbd>Skip</kbd> button — Skip to start</p>
@@ -340,7 +358,13 @@ const tr = {
 <p>Select harmonics (3/5/7/11) and set per-harmonic max usage</p>
 <p>Set target pitch, error tolerance (cents), and max steps</p>
 <p>Calculate — recursively extend selected roots towards target pitch</p>
-<p>Octave is always available regardless of harmonic selection</p>`
+<p>Octave is always available regardless of harmonic selection</p>
+<h4>Chord Connect</h4>
+<p>Select notes → press <kbd>V</kbd></p>
+<p>Choose dimensions (1d~7d), octave always available</p>
+<p>Set error tolerance (cents) and max steps</p>
+<p>Connect — links notes with same start time & duration into a chord via dimension paths</p>
+<p>Relay notes (intermediate path nodes) shown as dashed lines</p>`
 	},
 	'zh': {
 		"prog": "［进行］",
@@ -419,6 +443,12 @@ const tr = {
 		"custom": "自定义",
 		"add-dim": "+ 添加",
 		"promote": "提升为根音",
+		"chord-connect": "和弦连接",
+		"chord-connect-title": "和弦连接",
+		"chord-connect-use": "使用维度：",
+		"chord-connect-error": "误差 (音分)",
+		"chord-connect-max-steps": "最大步数",
+		"chord-connect-calc": "开始连接",
 		"help-content": `<h4>播放</h4>
 <p><kbd>Space</kbd> — 播放 / 暂停</p>
 <p><kbd>Skip</kbd> 按钮 — 跳回开头</p>
@@ -496,7 +526,13 @@ const tr = {
 <p>勾选泛音（3/5/7/11）并设每种最多使用次数</p>
 <p>设置目标音高、误差（音分）、最大步数</p>
 <p>开始计算 — 对选中根音递归添加维度逼近目标音高</p>
-<p>八度始终可用，不受泛音选择限制</p>`
+<p>八度始终可用，不受泛音选择限制</p>
+<h4>和弦连接</h4>
+<p>选中音符 → 按 <kbd>V</kbd> 键</p>
+<p>选择可用维度（1d~7d），八度始终可用</p>
+<p>设置误差（音分）和最大步数</p>
+<p>开始连接 — 将同时开始、同时值音符通过维度路径连接为和弦</p>
+<p>中继音（路径上的中间音符）以虚线显示</p>`
 	},
 	'sf': {
 		"prog": "[Clyftach]",
@@ -575,6 +611,12 @@ const tr = {
 		"custom": "Cux",
 		"add-dim": "+ Addyna",
 		"promote": "Plymyta ta Clypt",
+		"chord-connect": "Chlyd Cynnyct",
+		"chord-connect-title": "Chlyd Cynnyct",
+		"chord-connect-use": "Usa dymyns:",
+		"chord-connect-error": "Ellyl (cynts)",
+		"chord-connect-max-steps": "Max stypa",
+		"chord-connect-calc": "Cynnyct",
 		"help-content": `<h4>Plychbac</h4>
 <p><kbd>Space</kbd> — Plych / Pausa</p>
 <p><kbd>Skyp</kbd> byttyn — Skyp ta clypt</p>
@@ -652,6 +694,12 @@ const tr = {
 <p>Sylct hylmync (3/5/7/11) ynd cyt pal-hylmyn myx ycaga</p>
 <p>Cyt tylgal pych, elylyl tylylync (cyntc), myx cytpac</p>
 <p>Calclyta — lyclycyva ext sylctad clyptyc talaldc tylgal pych</p>
-<p>Xctyva yc yllayc yvylybyl lagnylacx yf hylmyn sylctyna</p>`
+<p>Xctyva yc yllayc yvylybyl lagnylacx yf hylmyn sylctyna</p>
+<h4>Chlyd Cynnyct</h4>
+<p>Sylct nytyc → plyc <kbd>V</kbd></p>
+<p>Chyca dymyncync (1d~7d), xctyva yllayc yvylybyl</p>
+<p>Cyt elylyl (cyntc) ynd myx cytpac</p>
+<p>Cynnyct — lyncc nytyc wyth cyma ctyl tyma & dylcyna ynta chlyd vya dymyncyn pytyc</p>
+<p>Lylay nytyc (yntalnadyt pyty nydac) cywn yc dydcyn lyny</p>`
 	},
 }

@@ -295,6 +295,22 @@ $('#config-bg-image-clear').addEventListener('click', function(e) {
 	applyBackground()
 }
 
+// T 键：背景透明度 +1（Alt+T: -1）
+document.addEventListener('keydown', e => {
+	if (e.key === 't' && !e.ctrlKey && !e.metaKey) {
+		const el = document.activeElement
+		const tag = el?.tagName
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+		e.preventDefault()
+		const slider = $('#config-bg-opacity')
+		let v = parseInt(slider.value) + (e.altKey ? -1 : 1)
+		v = Math.max(0, Math.min(100, v))
+		slider.value = v
+		localStorage.setItem('naf_bg_opacity', v)
+		applyBackground()
+	}
+})
+
 // 卷帘模式切换 // ピアノロールモード切替 // Piano roll mode toggle
 $('#config-pianoroll').addEventListener('change', function(e) {
 	grid.setPianoRoll(this.checked)
@@ -911,6 +927,257 @@ document.addEventListener('keydown', e => {
 		if ($('#overlay').style.visibility === 'visible') return  // 已有弹窗时不抢
 		e.preventDefault()
 		_openHarmonicFit()
+	}
+})
+
+// ==================== 和弦连接系统 ====================
+// ==================== コード接続 ====================
+// ==================== Chord Connect ====================
+
+// BFS 搜索：从源频率出发，用选中的维度步进，逼近目标频率
+function _chordSearch(srcHz, targetHz, allowedDims, maxSteps, errorCents) {
+	// 将目标归一化到源频率附近（八度范围内）
+	let tgt = targetHz
+	while (tgt > srcHz * 2) tgt /= 2
+	while (tgt < srcHz / 2) tgt *= 2
+
+	// 构建允许的移动列表（选中维度 + 八度始终可用）
+	const moves = []
+	// 八度步：×2 或 ÷2（始终可用）
+	moves.push({ n: 2, d: 1, key: '1d' })
+	moves.push({ n: 1, d: 2, key: '-1d' })
+
+	for (const dimKey of allowedDims) {
+		const pi = pitchIntervals[dimKey]
+		if (!pi || pi.id === 0 || pi.id === 1) continue  // 跳过 0d 和 1d（已添加八度）
+		moves.push({ n: pi.n, d: pi.d, key: dimKey })
+		// 反向维度
+		const negKey = '-' + dimKey
+		const negPi = pitchIntervals[negKey]
+		if (negPi) moves.push({ n: negPi.n, d: negPi.d, key: negKey })
+	}
+
+	// BFS: [当前频率, 当前比率分子, 当前比率分母, 步骤列表]
+	const queue = [[srcHz, 1, 1, []]]
+	const visited = new Set()
+	visited.add('1/1')
+
+	let bestPath = null
+	let bestError = Infinity
+
+	while (queue.length > 0) {
+		const [hz, rn, rd, path] = queue.shift()
+
+		// 检查是否到达目标（考虑八度等价）
+		const err = Math.min(centsOff(hz, tgt), centsOff(hz, tgt * 2), centsOff(hz, tgt / 2))
+		if (err < bestError) {
+			bestError = err
+			bestPath = path
+		}
+		if (err <= errorCents) break
+		if (path.length >= maxSteps) continue
+
+		for (const mv of moves) {
+			const nextRn = rn * mv.n
+			const nextRd = rd * mv.d
+			const g = gcd(nextRn, nextRd)
+			const sr = `${nextRn / g}/${nextRd / g}`
+
+			if (visited.has(sr)) continue
+			visited.add(sr)
+			queue.push([hz * mv.n / mv.d, nextRn, nextRd, [...path, mv.key]])
+		}
+	}
+
+	if (bestPath && bestPath.length > 0 && bestError <= errorCents * 3) return bestPath
+	if (bestPath && bestPath.length > 0) return bestPath
+	return null
+}
+
+// 执行和弦连接：将选中的同时值音符通过维度路径连接为一个和弦
+function _doChordConnect() {
+	const errorCents = parseFloat($('#cc-error').value) || 5
+	const maxSteps = parseInt($('#cc-max-steps').value) || 5
+
+	const allowedDims = []
+	for (const d of ['1d', '2d', '3d', '4d', '5d', '6d', '7d']) {
+		if ($(`#cc-dim-${d}`)?.checked) allowedDims.push(d)
+	}
+	// 确保八度（1d）在列表中
+	if (!allowedDims.includes('1d')) allowedDims.push('1d')
+
+	if (allowedDims.length === 0) return
+
+	const selected = window._sel?.selected?.size > 0 ? [...window._sel.selected] : []
+	if (selected.length < 2) {
+		$('#chord-connect-modal').style.display = 'none'
+		$('#overlay').style.visibility = ''
+		return
+	}
+
+	// 宽松分组：相同起始时间（容差 ±3 tick ≈ ±0.75px）和相近时值（容差 ±4 tick）的音符归入同一组
+	// 使用聚簇算法：先按 startTick 排序，相邻的且差值 ≤ 6 tick 的归入同一簇
+	const noteInfos = []
+	for (const note of selected) {
+		const root = note.root || note
+		const startX = note.type === 'root' ? note.x() : (root.x() + (note.delay || 0))
+		const lenX = note.len
+		const startTick = Math.round(x2t(startX))
+		const lenTick = Math.round(x2t(lenX))
+		noteInfos.push({ note, startTick, lenTick })
+	}
+
+	// 按开始时间排序
+	noteInfos.sort((a, b) => a.startTick - b.startTick)
+
+	// 聚簇：开始时间在容差内的归一组
+	const TOLERANCE = 6 // 约 1.5px
+	const groups = []
+	let currentGroup = [noteInfos[0]]
+	for (let i = 1; i < noteInfos.length; i++) {
+		const prev = currentGroup[currentGroup.length - 1]
+		if (Math.abs(noteInfos[i].startTick - prev.startTick) <= TOLERANCE) {
+			currentGroup.push(noteInfos[i])
+		} else {
+			groups.push(currentGroup)
+			currentGroup = [noteInfos[i]]
+		}
+	}
+	groups.push(currentGroup)
+
+	// 过滤：只保留 2 个以上音符的组
+	const validGroups = groups.filter(g => g.length >= 2)
+	if (validGroups.length === 0) {
+		$('#chord-connect-modal').style.display = 'none'
+		$('#overlay').style.visibility = ''
+		return
+	}
+
+	history.snapshot()
+
+	// 逐组处理
+	for (const group of validGroups) {
+		const notes = group.map(g => g.note)
+
+		// 按频率排序（最低的作为根音）
+		notes.sort((a, b) => a.hz - b.hz)
+
+		// 找到最低频率的根音（是 RootNote 的优先，否则提升）
+		let chordRoot = null
+		for (const n of notes) {
+			if (n.type === 'root') { chordRoot = n; break }
+		}
+		if (!chordRoot) {
+			// 所有选中的都是 SubNote，提升最低频的那个
+			chordRoot = notes[0].promoteToRoot()
+			notes.splice(0, 1)
+		}
+
+		const rootHz = chordRoot.hz
+		const rootLen = chordRoot.len
+
+		// 连接其余音符到根音
+		for (const targetNote of notes) {
+			if (targetNote === chordRoot || targetNote.root === chordRoot) continue
+
+			const targetHz = targetNote.hz
+			const path = _chordSearch(rootHz, targetHz, allowedDims, maxSteps, errorCents)
+			if (!path || path.length === 0) continue
+
+			// 计算路径终点频率，追加八度步使最终频率尽量逼近原始目标音高
+			let pathHz = rootHz
+			for (const key of path) {
+				const pi = pitchIntervals[key]
+				if (pi) pathHz *= pi.n / pi.d
+			}
+			// 比较上/下八度哪个更接近目标，追加零步或一步
+			const errStay = Math.abs(pathHz - targetHz)
+			const errUp   = Math.abs(pathHz * 2 - targetHz)
+			const errDn   = Math.abs(pathHz / 2 - targetHz)
+			if (errUp < errStay && errUp < errDn) {
+				path.push('1d')
+			} else if (errDn < errStay && errDn < errUp) {
+				path.push('-1d')
+			}
+
+			// 记录目标音符的属性
+			const targetVol = targetNote.volume
+			const targetMute = targetNote.isMuted
+			const targetHidden = targetNote._hidden
+			const targetPitchThick = targetNote._pitchThick
+			const targetLinkThick = targetNote._linkThick
+			const targetLinkOpacity = targetNote._linkOpacity
+			const targetNoteOpacity = targetNote._noteOpacity
+
+			// 删除原始目标音符
+			targetNote.del()
+
+			// 沿路径逐步添加子音符
+			let current = chordRoot
+			for (let i = 0; i < path.length; i++) {
+				const interval = _intervalForKey(path[i])
+				const child = current.addNote(current.len, interval, 0)
+
+				// 中继音（非最后一步）设为虚线
+				if (i < path.length - 1) {
+					child.pitchline.dash([8, 6])
+				} else {
+					// 最后一步：应用目标音符的属性
+					child.volume = targetVol
+					if (targetMute) child.mute = true
+					if (targetHidden) child.hidden = true
+					child._pitchThick = targetPitchThick
+					child.pitchline.strokeWidth(targetPitchThick)
+					child._linkThick = targetLinkThick
+					child._linkOpacity = targetLinkOpacity
+					child._noteOpacity = targetNoteOpacity
+					child.pitchline.opacity(targetNoteOpacity)
+					if (child.linkLine) child.linkLine.opacity(targetLinkOpacity)
+				}
+
+				current = child
+			}
+		}
+	}
+
+	$('#chord-connect-modal').style.display = 'none'
+	$('#overlay').style.visibility = ''
+	rootlayer.draw()
+	grid.autoLoop()
+}
+
+// 打开和弦连接弹窗
+function _openChordConnect() {
+	$('#overlay').style.visibility = 'visible'
+	const modal = $('#chord-connect-modal')
+	modal.style.display = 'flex'
+	modal.style.justifyContent = 'center'
+	modal.style.alignItems = 'center'
+}
+
+// 计算按钮
+$('#cc-calc-btn').addEventListener('click', _doChordConnect)
+
+// 取消按钮
+$('#cc-cancel-btn').addEventListener('click', () => {
+	$('#chord-connect-modal').style.display = 'none'
+	$('#overlay').style.visibility = ''
+})
+
+// 点击遮罩层关闭
+$('#chord-connect-modal').addEventListener('click', function(e) {
+	if (e.target === this) { this.style.display = 'none'; $('#overlay').style.visibility = '' }
+})
+
+// 键盘 'v' 键打开（不拦截输入框）
+document.addEventListener('keydown', e => {
+	if (e.key === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		const el = document.activeElement
+		const tag = el?.tagName
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+		if ($('#overlay').style.visibility === 'visible') return  // 已有弹窗时不抢
+		e.preventDefault()
+		_openChordConnect()
 	}
 })
 

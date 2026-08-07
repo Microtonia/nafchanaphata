@@ -207,17 +207,17 @@ export function exportMidi(rootlayer) { exportMidiMicrotonal(rootlayer) }
 // Sample mapping per instrument: { note name → [file URL, MIDI reference pitch] }
 const SAMPLE_DEFS = {
 	'salamander-piano': {
-		baseUrl: 'sound/salamander/',
+		baseUrl: 'assets/sound/salamander/',
 		ext: '.mp3',
 		notes: { A0:21,A1:33,A2:45,A3:57,A4:69,A5:81,A6:93,A7:105, C1:24,C2:36,C3:48,C4:60,C5:72,C6:84,C7:96,C8:108, 'D#1':27,'D#2':39,'D#3':51,'D#4':63,'D#5':75,'D#6':87,'D#7':99, 'F#1':30,'F#2':42,'F#3':54,'F#4':66,'F#5':78,'F#6':90,'F#7':102 }
 	},
 	'vcsl-strumstick': {
-		baseUrl: 'sound/strumstick/',
+		baseUrl: 'assets/sound/strumstick/',
 		ext: '.ogg',
 		notes: { A2:45,A3:57,A4:69, B2:47,B3:59, 'C#3':49,'C#4':61, D2:38,D3:50,D4:62, E2:40,E3:52,E4:64, 'F#2':42,'F#3':54,'F#4':66, G2:43,G3:55,G4:67 }
 	},
 	'vcsl-vibraphone': {
-		baseUrl: 'sound/vibraphone/',
+		baseUrl: 'assets/sound/vibraphone/',
 		ext: '.ogg',
 		notes: { A2:45,A4:69, B3:59, C3:48,C5:72, D4:62, E3:52,E5:76, F2:41,F4:65, G3:55 }
 	}
@@ -291,13 +291,22 @@ function findSampleMatch(buffers, hz) {
 // 离线渲染音频 → AudioBuffer（秒级完成，不等实际时长）
 // オフラインレンダリング Audio → AudioBuffer（高速、実時間を待たない）
 // Offline render audio → AudioBuffer (fast, does not wait for real time)
-async function renderOffline(rootlayer) {
+async function renderOffline(rootlayer, onProgress) {
+	onProgress?.('加载乐器采样...', 10)
 	const tone = $('#config-tone').value || 'salamander-piano'
 	const buffers = await getSampleBuffers(tone)
-	if (!buffers || !Object.keys(buffers).length) return null
+	if (!buffers || !Object.keys(buffers).length) {
+		onProgress?.('采样加载失败', 100)
+		return null
+	}
 
 	const allNotes = collectAllNotes(rootlayer)
-	if (!allNotes.length) return null
+	if (!allNotes.length) {
+		onProgress?.('无音符可导出', 100)
+		return null
+	}
+
+	onProgress?.('生成音频...', 30)
 
 	const beatMs = parseInt($('#config-beat').value) || 500
 	const secPerTick = beatMs / 1000 / PROJ_TICKS_PER_BEAT
@@ -307,7 +316,10 @@ async function renderOffline(rootlayer) {
 	const sampleRate = 44100
 	const ctx = new OfflineAudioContext(2, Math.ceil(totalDuration * sampleRate), sampleRate)
 
-	for (const n of allNotes) {
+	// 按音符顺序添加，每处理 20% 更新进度
+	const total = allNotes.length
+	for (let i = 0; i < allNotes.length; i++) {
+		const n = allNotes[i]
 		const match = findSampleMatch(buffers, n.hz)
 		if (!match) continue
 
@@ -325,14 +337,38 @@ async function renderOffline(rootlayer) {
 		// 淡出避免 click
 		gain.gain.setValueAtTime(gain.gain.value, startTime + duration - 0.05)
 		gain.gain.linearRampToValueAtTime(0, startTime + duration + 0.1)
+
+		// 每处理 20% 更新进度
+		if (i % Math.max(1, Math.floor(total / 5)) === 0) {
+			onProgress?.(`生成音频... (${Math.round(i / total * 100)}%)`, 30 + Math.round(i / total * 40))
+		}
 	}
 
-	return await ctx.startRendering()
+	onProgress?.('渲染音频...', 75)
+	const result = await ctx.startRendering()
+	onProgress?.('编码 WAV...', 90)
+	return result
 }
 
 // ========== 导出: WAV ==========
 // ========== エクスポート: WAV ==========
 // ========== Export: WAV ==========
+
+// 显示导出进度弹窗
+function _showExportProgress(text, percent) {
+	const modal = document.getElementById('export-progress-modal')
+	const textEl = document.getElementById('export-progress-text')
+	const bar = document.getElementById('export-progress-bar')
+	if (modal) modal.style.display = 'flex'
+	if (textEl) textEl.textContent = text
+	if (bar) bar.style.width = (percent || 0) + '%'
+}
+
+// 隐藏导出进度弹窗
+function _hideExportProgress() {
+	const modal = document.getElementById('export-progress-modal')
+	if (modal) modal.style.display = 'none'
+}
 
 // AudioBuffer → WAV Blob：编码为 16-bit PCM 立体声 WAV
 // AudioBuffer → WAV Blob：16 ビット PCM ステレオ WAV にエンコード
@@ -361,9 +397,16 @@ function writeStr(view, off, str) { for (let i = 0; i < str.length; i++) view.se
 
 // 导出 WAV：离线渲染并下载 // WAV をエクスポート：オフラインレンダリングしてダウンロード // Export WAV: offline render and download
 export async function exportWav(rootlayer) {
-	const buffer = await renderOffline(rootlayer)
-	if (!buffer) return
+	_showExportProgress('加载乐器采样...', 5)
+	const buffer = await renderOffline(rootlayer, _showExportProgress)
+	if (!buffer) {
+		setTimeout(_hideExportProgress, 1500)  // 错误信息显示 1.5 秒后关闭
+		return
+	}
+	_showExportProgress('正在下载...', 95)
 	downloadBlob(audioBufferToWav(buffer), 'nafchanaphata.wav')
+	_showExportProgress('导出完成', 100)
+	setTimeout(_hideExportProgress, 600)
 }
 
 // ========== MIDI 导入 ==========
