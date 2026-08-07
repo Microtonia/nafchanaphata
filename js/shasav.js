@@ -246,6 +246,7 @@ $('#config-bg-image-url').addEventListener('change', function(e) {
 	if (url) {
 		localStorage.setItem('naf_bg_image', url)
 		$('#config-bg-image-clear').style.display = ''
+		$('#config-bg-image-preset').value = ''
 	} else {
 		localStorage.removeItem('naf_bg_image')
 		$('#config-bg-image-clear').style.display = 'none'
@@ -268,6 +269,7 @@ $('#config-bg-image-file').addEventListener('change', function(e) {
 		localStorage.setItem('naf_bg_image', dataUrl)
 		$('#config-bg-image-clear').style.display = ''
 		$('#config-bg-image-url').value = ''
+		$('#config-bg-image-preset').value = ''
 		applyBackground()
 	}
 	reader.readAsDataURL(file)
@@ -278,6 +280,7 @@ $('#config-bg-image-clear').addEventListener('click', function(e) {
 	localStorage.removeItem('naf_bg_image')
 	$('#config-bg-image-url').value = ''
 	$('#config-bg-image-file').value = ''
+	$('#config-bg-image-preset').value = ''
 	this.style.display = 'none'
 	applyBackground()
 })
@@ -294,6 +297,56 @@ $('#config-bg-image-clear').addEventListener('click', function(e) {
 	}
 	applyBackground()
 }
+
+// 背景图片预设列表 // 背景画像プリセット // Background image presets
+const BG_PRESETS = [
+	{ name: 'aurora1', file: 'aurora1.jpg' },
+	{ name: 'aurora2', file: 'aurora2.jpg' },
+	{ name: 'aurora3', file: 'aurora3.jpg' },
+	{ name: 'aurora4', file: 'aurora4.jpg' },
+	{ name: 'aurora5', file: 'aurora5.jpg' },
+	{ name: 'aurora6', file: 'aurora6.jpeg' },
+	{ name: 'beach1',  file: 'beach1.jpg' },
+	{ name: 'beach2',  file: 'beach2.jpg' },
+	{ name: 'beach3',  file: 'beach3.jpg' },
+	{ name: 'dsc',     file: 'dsc.png' },
+	{ name: 'mount1',  file: 'mount1.jpg' },
+	{ name: 'mount2',  file: 'mount2.jpg' },
+	{ name: 'mount3',  file: 'mount3.jpg' },
+	{ name: 'mount4',  file: 'mount4.jpg' },
+	{ name: 'mount5',  file: 'mount5.jpg' },
+	{ name: 'mount6',  file: 'mount6.jpg' },
+	{ name: 'snow1',   file: 'snow1.jpg' },
+]
+
+// 填充预设下拉框
+{
+	const sel = $('#config-bg-image-preset')
+	for (const p of BG_PRESETS) {
+		const opt = document.createElement('option')
+		opt.value = 'assets/background/' + p.file
+		opt.textContent = p.name
+		sel.appendChild(opt)
+	}
+	// 如果当前背景是预设图片，同步选中
+	const cur = localStorage.getItem('naf_bg_image')
+	if (cur) {
+		for (const p of BG_PRESETS) {
+			const url = 'assets/background/' + p.file
+			if (cur.includes(p.file)) { sel.value = url; break }
+		}
+	}
+}
+
+// 预设下拉切换
+$('#config-bg-image-preset').addEventListener('change', function() {
+	const url = this.value
+	if (!url) return // "自定义..." 选项
+	localStorage.setItem('naf_bg_image', url)
+	$('#config-bg-image-clear').style.display = ''
+	$('#config-bg-image-url').value = ''
+	applyBackground()
+})
 
 // T 键：背景透明度 +1（Alt+T: -1）
 document.addEventListener('keydown', e => {

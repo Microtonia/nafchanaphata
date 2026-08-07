@@ -381,13 +381,13 @@
 	<nav>
 		<span class="max" data-i18n="notecolor">音符颜色</span>
 		<label class="checkbox">
-			<input id="config-color-wavelength" type="checkbox" name="notecolor" checked><span data-i18n="wavelength">波长</span>
+			<input id="config-color-wavelength" type="checkbox" name="notecolor"><span data-i18n="wavelength">波长</span>
 		</label>
 		<label class="checkbox">
 			<input id="config-color-hsl" type="checkbox" name="notecolor"><span data-i18n="hsl">HSI增强</span>
 		</label>
 		<label class="checkbox">
-			<input id="config-color-white" type="checkbox" name="notecolor"><span data-i18n="color-white">白色</span>
+			<input id="config-color-white" type="checkbox" name="notecolor" checked><span data-i18n="color-white">白色</span>
 		</label>
 	</nav>
 	<nav>
@@ -435,6 +435,12 @@
 	<nav>
 		<span class="max" data-i18n="bg-image">背景图片</span>
 		<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+			<div class="field suffix border round small" style="margin:0;">
+				<select id="config-bg-image-preset" style="min-width:110px;">
+					<option value="" data-i18n="bg-image-custom">自定义...</option>
+				</select>
+				<i>arrow_drop_down</i>
+			</div>
 			<input id="config-bg-image-url" type="text" placeholder="URL" style="width:120px;background:#3a3a56;color:#fff;border:1px solid #555;border-radius:4px;padding:4px 6px;font-size:12px;">
 			<label class="btn small round" id="config-bg-image-choose" style="cursor:pointer;margin:0;padding:2px 8px;font-size:11px;" data-i18n="bg-image-choose">选择文件</label>
 			<button id="config-bg-image-clear" class="small round" style="background:#d32f2f;color:#fff;border:none;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;display:none;" data-i18n="bg-image-clear">清除</button>
