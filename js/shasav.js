@@ -113,6 +113,13 @@ $('#config-scoreline-3d').addEventListener('change', function(e) {
 $('#config-scoreline-4d').addEventListener('change', function(e) {
 	grid.drawScorelines()
 })
+// EDO 谱线：勾选/改变 EDO 时重绘等分横线
+$('#config-edo-lines').addEventListener('change', function(e) {
+	grid.drawEdoLines()
+})
+$('#config-edo').addEventListener('change', function(e) {
+	grid.drawEdoLines()
+})
 // 启用 6d/7d 维度 // 6d/7d 次元を有効化 // Enable 6d/7d dimensions
 $('#config-enable-6d').addEventListener('change', function(e) {
 	for (const i of $$('.btn-6d')) {

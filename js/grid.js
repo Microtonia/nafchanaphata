@@ -29,6 +29,7 @@ export class Grid extends Konva.Layer {
 		this.scorelines3 = new Konva.Group()
 		this.scorelines4 = new Konva.Group()
 		this.beatlines = new Konva.Group()
+		this.edolines = new Konva.Group()
 		this.tonicline = new Konva.Line()
 		
 		this.indicator = new Konva.Line({
@@ -105,13 +106,14 @@ export class Grid extends Konva.Layer {
 		})
 		this.setLoop()
 		
-		this.add(this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
+		this.add(this.edolines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
 		// 非交互元素禁用 hit 检测，减少大量网格线的碰撞计算 / 非インタラクティブ要素のヒット検出を無効化し、大量のグリッド線の衝突計算を削減 / Disable hit detection on non-interactive elements to reduce collision checks
 		this.scorelines.listening(false)
 		this.scorelines2.listening(false)
 		this.scorelines3.listening(false)
 		this.scorelines4.listening(false)
 		this.beatlines.listening(false)
+		this.edolines.listening(false)
 		this.tonicline.listening(false)
 		this.indicator.listening(false)
 		this.drawScorelines()
@@ -244,7 +246,31 @@ export class Grid extends Konva.Layer {
 			strokeWidth: 3,
 			stroke: '#b5b4c2'
 		})
+		this.drawEdoLines()
 		this.adjust()
+	}
+
+	// 绘制 EDO 谱线：八度等分为 EDO 份的半透明横线（勾选 config-edo-lines 时显示）
+	// EDO譜線を描画：オクターブをEDO等分した半透明の横線（config-edo-linesチェック時に表示）
+	// Draw EDO lines: translucent horizontal lines dividing the octave into EDO equal steps
+	drawEdoLines() {
+		this.edolines.destroyChildren()
+		const check = $('#config-edo-lines')?.checked
+		if (!check) return
+		const edo = parseInt($('#config-edo').value)
+		if (!edo || edo < 2) return
+		const step = this.octave / edo  // 每个音高步的像素高度
+		const lineCount = Math.ceil(window.innerHeight / this.stage.scaleY() / step) + 1
+		for (const i of range(lineCount)) {
+			this.edolines.add(new Konva.Line({
+				x: 0,
+				y: step * i,
+				points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
+				strokeWidth: 0.5,
+				stroke: '#ffffff',
+				opacity: 0.12
+			}))
+		}
 	}
 	
 	// 绘制节拍竖线 / ビート縦線を描画 / Draw beat vertical lines
@@ -307,6 +333,13 @@ export class Grid extends Konva.Layer {
 		this.scorelines3.y(top3)
 		this.scorelines4.y(top4)
 		this.tonicline.y(tonicY)
+
+		// EDO 谱线：对齐到 tonic 的等分网格
+		const edo = parseInt($('#config-edo').value)
+		const edoStep = this.octave / (edo >= 2 ? edo : 12)
+		const topEdo = tonicY - Math.floor((tonicY + this.stage.y() / this.stage.scaleY()) / edoStep) * edoStep
+		this.edolines.x(-this.stage.x() / this.stage.scaleX())
+		this.edolines.y(topEdo)
 		
 		const left = Math.floor(-this.stage.x() / this.stage.scaleX() / 48) * 48
 		this.beatlines.x(left)
