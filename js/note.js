@@ -334,13 +334,15 @@ export class Note extends Konva.Group {
 // RootNote class: root note, top-level node of the chord tree, supports drag (move/stretch head/stretch tail) and Shift mode
 export class RootNote extends Note {
 	constructor(stage, x, y, len, hz, interval, tick) {
+		// 传入明确 hz 时直接使用（不量化，供反序列化精确恢复）；否则按 EDO 量化 y 坐标
+		const actualHz = hz || qb(y2hz(y))
 		super(stage, {
 			x: x,
-			y: hz2y(qb(y2hz(y))),
+			y: hz2y(actualHz),
 			draggable: true
 		}, len, 0, interval, tick)
 		this.type = 'root'
-		this._hz = hz || qb(y2hz(y))
+		this._hz = actualHz
 		this._needsBuild = true   // 延迟构建，避免每次添加子音都重建
 
 		// 拖拽开始处理器：记录初始状态、检测拖拽模式（头部/尾部/整体）、启动选区组拖拽

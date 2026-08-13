@@ -110,7 +110,8 @@ export class Serializer {
 		if (u.s && u.s.o != null) rootlayer.opacity(u.s.o)
 		if (!u.n) return
 		for (const n of u.n) {
-			const p = new RootNote(stage, n.x / 4 || 0, hz2y(n.h / hzDiv), n.l / 4, null, null, n.tk)
+			// 传入实际频率 hz，跳过 EDO 量化，精确恢复音高（避免改 EDO 后 Ctrl+Z 导致所有音变化）
+			const p = new RootNote(stage, n.x / 4 || 0, hz2y(n.h / hzDiv), n.l / 4, n.h / hzDiv, null, n.tk)
 			p.mute = n.m || false
 			p.volume = 50 + (n.v || 0)
 			// 恢复外观属性 / 外観属性を復元 / Restore visual properties
