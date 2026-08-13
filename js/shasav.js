@@ -298,44 +298,34 @@ $('#config-bg-image-clear').addEventListener('click', function(e) {
 	applyBackground()
 }
 
-// 背景图片预设列表 // 背景画像プリセット // Background image presets
-const BG_PRESETS = [
-	{ name: 'aurora1', file: 'aurora1.jpg' },
-	{ name: 'aurora2', file: 'aurora2.jpg' },
-	{ name: 'aurora3', file: 'aurora3.jpg' },
-	{ name: 'aurora4', file: 'aurora4.jpg' },
-	{ name: 'aurora5', file: 'aurora5.jpg' },
-	{ name: 'aurora6', file: 'aurora6.jpeg' },
-	{ name: 'beach1',  file: 'beach1.jpg' },
-	{ name: 'beach2',  file: 'beach2.jpg' },
-	{ name: 'beach3',  file: 'beach3.jpg' },
-	{ name: 'dsc',     file: 'dsc.png' },
-	{ name: 'mount1',  file: 'mount1.jpg' },
-	{ name: 'mount2',  file: 'mount2.jpg' },
-	{ name: 'mount3',  file: 'mount3.jpg' },
-	{ name: 'mount4',  file: 'mount4.jpg' },
-	{ name: 'mount5',  file: 'mount5.jpg' },
-	{ name: 'mount6',  file: 'mount6.jpg' },
-	{ name: 'snow1',   file: 'snow1.jpg' },
-]
-
-// 填充预设下拉框
+// 填充预设下拉框：从服务器动态读取 assets/background 目录
 {
 	const sel = $('#config-bg-image-preset')
-	for (const p of BG_PRESETS) {
-		const opt = document.createElement('option')
-		opt.value = 'assets/background/' + p.file
-		opt.textContent = p.name
-		sel.appendChild(opt)
-	}
-	// 如果当前背景是预设图片，同步选中
 	const cur = localStorage.getItem('naf_bg_image')
-	if (cur) {
-		for (const p of BG_PRESETS) {
-			const url = 'assets/background/' + p.file
-			if (cur.includes(p.file)) { sel.value = url; break }
+	// 同步选中当前背景并填充下拉
+	function syncSelection() {
+		if (!cur) { sel.value = ''; return }
+		for (const opt of sel.options) {
+			if (opt.value && cur.includes(opt.value.split('/').pop())) {
+				sel.value = opt.value
+				return
+			}
 		}
+		sel.value = ''
 	}
+	fetch('/api/backgrounds')
+		.then(r => r.json())
+		.then(files => {
+			for (const f of files) {
+				const opt = document.createElement('option')
+				const url = 'assets/background/' + f
+				opt.value = url
+				opt.textContent = f.replace(/\.[^.]+$/, '')
+				sel.appendChild(opt)
+			}
+			syncSelection()
+		})
+		.catch(() => { /* 目录读取失败时忽略，保留自定义模式 */ })
 }
 
 // 预设下拉切换
