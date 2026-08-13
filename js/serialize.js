@@ -77,6 +77,7 @@ export class Serializer {
 			lo: note._linkOpacity,
 			no: note._noteOpacity,
 			tk: note._tick,
+			lx: Math.round((note._linkShiftX || 0) * 4),
 			s: note.childNotes.children.map(x => this.sub2json(x))
 		}
 	}
@@ -158,6 +159,11 @@ export class Serializer {
 		q._linkOpacity = m.lo || q._linkOpacity
 		q._noteOpacity = m.no ?? q._noteOpacity
 		q._tick = m.tk || q._tick
+		if (m.lx) {
+			q._linkShiftX = m.lx / 4
+			q.linkLine.setAttrs(q.lineConfig)
+			q.linkContainer.clip(q.clip)
+		}
 		q.pitchline.strokeWidth(q._pitchThick)
 		q.pitchline.opacity(q._noteOpacity)
 		// 恢复隐藏状态（必须在 pitchline.opacity 之后，否则会被覆盖）

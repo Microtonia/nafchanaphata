@@ -382,22 +382,21 @@ export class RootNote extends Note {
 		// ドラッグ移動ハンドラ：モードに応じて位置/長さをリアルタイム更新、Ctrl コード連動と Shift チェーンをサポート
 		// Drag move handler: update position/length in real time per mode, supports Ctrl chord sync and Shift chaining
 		.on('dragmove', e => {
-			const curTick = parseInt($('#config-tick').value) || 1
 			switch (this.stage.dragMode) {
 				case 'head':
-					this.len = Math.max(10, this.origTailX - qh(this.x(), curTick))
-					this.x(qh(this.x(), curTick))
+					this.len = Math.max(10, this.origTailX - qh(this.x()))
+					this.x(qh(this.x()))
 					this.y(this.origY)
 					// Ctrl：头部拖动时所有子音符等量缩短
 					if (this._ctrlChordDrag && this._ctrlSubs) {
-						const d = qh(this.x(), curTick) - qh(this.origX, curTick)
+						const d = qh(this.x()) - qh(this.origX)
 						for (const s of this._ctrlSubs) {
 							s.note.len = Math.max(10, s.origLen - d)
 						}
 					}
 					break
 				case 'tail':
-					this.len = Math.max(10, qt(this.stage.getRelativePointerPosition().x, curTick) - this.origX)
+					this.len = Math.max(10, qt(this.stage.getRelativePointerPosition().x) - this.origX)
 					this.x(this.origX)
 					this.y(this.origY)
 					if (this._ctrlChordDrag && this._ctrlSubs) {
@@ -413,7 +412,7 @@ export class RootNote extends Note {
 					}
 					break
 				case 'body':
-					this.x(qh(this.x(), curTick))
+					this.x(qh(this.x()))
 					this.y(this.y())
 					this.quantize()
 					// Ctrl 模式下 body 拖拽根音：子音自动跟随（它们相对根音定位），无需额外处理
@@ -622,17 +621,16 @@ export class SubNote extends Note {
 			if (this._ctrlChordDrag) {
 				const ptr = this.stage.getRelativePointerPosition()
 				const deltaX = ptr.x - this._ctrlStartPtrX
-				const curTick = parseInt($('#config-tick').value) || 1
 				switch (this.stage.dragMode) {
 					case 'body':
 						// 整体平移：移动根音
-						this.root.x(qh(this._ctrlOrigRootX + deltaX, curTick))
+						this.root.x(qh(this._ctrlOrigRootX + deltaX))
 						this.pitchline.x(this.origX)
 						this.pitchline.y(0)
 						break
 					case 'head': {
-						const d = qh(deltaX, curTick)
-						this.root.x(qh(this._ctrlOrigRootX + d, curTick))
+						const d = qh(deltaX)
+						this.root.x(qh(this._ctrlOrigRootX + d))
 						this.root.len = Math.max(10, this._ctrlOrigRootLen - d)
 						this.pitchline.x(this.origX)
 						this.pitchline.y(0)
@@ -642,7 +640,7 @@ export class SubNote extends Note {
 						break
 					}
 					case 'tail': {
-						const subLen = Math.max(10, qt(this.link.getRelativePointerPosition().x, curTick) - this.origX)
+						const subLen = Math.max(10, qt(this.link.getRelativePointerPosition().x) - this.origX)
 						const ratio = subLen / (this.origLen || 1)
 						this.root.len = Math.max(10, Math.round(this._ctrlOrigRootLen * ratio))
 						this.pitchline.x(this.origX)
@@ -654,20 +652,19 @@ export class SubNote extends Note {
 					}
 				}
 			} else {
-				const curTick = parseInt($('#config-tick').value) || 1
 				switch (this.stage.dragMode) {
 					case 'head':
-						this.len = Math.max(10, this.origTailX - qh(this.pitchline.x(), curTick))
-						this.pitchline.x(qh(this.pitchline.x(), curTick))
+						this.len = Math.max(10, this.origTailX - qh(this.pitchline.x()))
+						this.pitchline.x(qh(this.pitchline.x()))
 						this.pitchline.y(0)
 						break
 					case 'tail':
-						this.len = Math.max(10, qt(this.link.getRelativePointerPosition().x, curTick) - this.origX)
+						this.len = Math.max(10, qt(this.link.getRelativePointerPosition().x) - this.origX)
 						this.pitchline.x(this.origX)
 						this.pitchline.y(0)
 						break
 					case 'body':
-						this.pitchline.x(qh(this.pitchline.x(), curTick))
+						this.pitchline.x(qh(this.pitchline.x()))
 						this.pitchline.y(0)
 						this.quantize()
 						// 选中组整体拖动
@@ -703,7 +700,29 @@ export class SubNote extends Note {
 		this.linkContainer = new Konva.Group({
 			clip: this.clip
 		})
+		this._linkShiftX = 0  // 维度线独立水平偏移（与音符位置无关）
 		this.linkLine = new Konva.Line(this.lineConfig)
+		// 维度线左右拖动：形状不变，移动与音符无关
+		this.linkLine.on('dragstart', e => {
+			e.cancelBubble = true
+			this.stage.isNoteDragging = true  // 阻止 stage 响应
+			history.snapshot()
+		})
+		this.linkLine.on('dragmove', e => {
+			this.linkLine.y(0)  // 垂直锁定，仅水平移动
+			// 实时让裁剪区域跟随当前偏移，保证整条线可见
+			const shift = this.linkLine.x() - (this.len * this.interval.t + this.delay)
+			this.linkContainer.clip({
+				x: this.delay + this.interval.m + shift,
+				y: this.interval.n > this.interval.d ? -1.5 : 1.5,
+				width: this.len + Math.abs(this.interval.m) * 2,
+				height: f2d(this.interval.d, this.interval.n) + (this.interval.n > this.interval.d ? 3 : -3)
+			})
+		})
+		this.linkLine.on('dragend', e => {
+			this._linkShiftX = this.linkLine.x() - (this.len * this.interval.t + this.delay)
+			this.stage.isNoteDragging = false
+		})
 		this.link.add(this.linkContainer.add(this.linkLine))
 		this.link.add(this.childLinks)
 	}
@@ -749,7 +768,7 @@ export class SubNote extends Note {
 	// 连线裁剪区域 // リンクのクリップ領域 // Link clipping region
 	get clip() {
 		return {
-			x: this.delay + this.interval.m,
+			x: this.delay + this.interval.m + (this._linkShiftX || 0),
 			y: this.interval.n > this.interval.d ? -1.5 : 1.5,
 			width: this.len + Math.abs(this.interval.m) * 2,
 			height: f2d(this.interval.d, this.interval.n) + (this.interval.n > this.interval.d ? 3 : -3)
@@ -758,7 +777,7 @@ export class SubNote extends Note {
 	// 连线配置 // リンク設定 // Link configuration
 	get lineConfig() {
 		return {
-			x: this.len * this.interval.t + this.delay,
+			x: this.len * this.interval.t + this.delay + (this._linkShiftX || 0),
 			y: 0,
 			points: [
 				Math.sign(this.interval.t - 0.5) * - this.interval.w / 2,
@@ -772,7 +791,8 @@ export class SubNote extends Note {
 			tension: 0.5,
 			stroke: this.interval.c,
 			strokeWidth: this.interval.w * (this.root?._linkThick || 1),
-			listening: false
+			hitStrokeWidth: 12,
+			draggable: true
 		}
 	}
 

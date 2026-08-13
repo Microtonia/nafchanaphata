@@ -322,6 +322,7 @@ export const Select = {
 			linkOpacity: note._linkOpacity,
 			noteOpacity: note._noteOpacity,
 			tick: note._tick,
+			linkShiftX: note._linkShiftX || 0,
 			_isRoot: note instanceof RootNote,
 			intId: note._interval?.id,
 			delay: note.delay || 0,
@@ -376,6 +377,11 @@ export const Select = {
 		if (json.linkOpacity) sub._linkOpacity = json.linkOpacity
 		if (json.noteOpacity != null) sub._noteOpacity = json.noteOpacity
 		if (json.tick) sub._tick = json.tick
+		if (json.linkShiftX) {
+			sub._linkShiftX = json.linkShiftX
+			sub.linkLine.setAttrs(sub.lineConfig)
+			sub.linkContainer.clip(sub.clip)
+		}
 		sub.pitchline.strokeWidth(sub._pitchThick)
 		sub.pitchline.opacity(sub._noteOpacity)
 		if (sub.linkLine) sub.linkLine.opacity(sub._linkOpacity)
