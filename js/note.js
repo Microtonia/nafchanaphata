@@ -110,7 +110,7 @@ export class Note extends Konva.Group {
 			y: 0,
 			points: [0, 0, len, 0],
 			strokeWidth: 3,
-			hitStrokeWidth: 20,
+			hitStrokeWidth: 8,
 			stroke: 'white'
 		})
 		this.delay = delay
@@ -201,6 +201,7 @@ export class Note extends Konva.Group {
 	set pitchThick(v) {
 		this._pitchThick = v
 		this.pitchline.strokeWidth(v)
+		this.pitchline.hitStrokeWidth(Math.max(8, v))  // 命中区域跟随视觉粗细，但不小于 8px
 	}
 	setPitchThickRecursive(v) {
 		this.pitchThick = v
