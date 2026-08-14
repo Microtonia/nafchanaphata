@@ -31,8 +31,10 @@ export class Serializer {
 			o: rootlayer.opacity()
 		} : { v: 2, o: rootlayer.opacity() }   // 历史快照也带版本标记，避免反序列化时 hzDiv 回退到 16 / 履歴スナップショットにもバージョンタグを付与、デシリアライズ時のhzDiv後退を防止 / History snapshots also carry version tag to prevent hzDiv fallback to 16
 		const n = rootlayer.children.map(x => this.root2json(x))
+		// 序列化文字注释（通过 window 访问，避免循环依赖）
+		const texts = window._textSel ? [...window._textSel.all].map(t => t.toJSON()) : []
 		const json = JSON.stringify(
-			{s: s, n: n}, 
+			{s: s, n: n, x: texts}, 
 			(k, v) => (!v || v.length == 0) ? undefined : v
 		)
 		// 分享/保存用 crush 压缩 URL；历史快照用纯 JSON 避免 CPU 开销
@@ -108,6 +110,20 @@ export class Serializer {
 		}
 		// 恢复 layer 级透明度，避免 Ctrl+Z 后音符透明度丢失
 		if (u.s && u.s.o != null) rootlayer.opacity(u.s.o)
+		// 恢复文字注释（通过 window 访问，避免循环依赖）
+		if (window._textSel && window._TextNote && window._textlayer) {
+			window._textSel.clearAll()
+			$('#text-edit-modal').style.display = 'none'
+			if (u.x) {
+				for (const j of u.x) {
+					const t = window._TextNote.fromJSON(j)
+					window._textlayer.add(t.konva)
+					window._textSel.all.add(t)
+					t.syncHtmlPosition()
+				}
+			}
+			window._textlayer.draw()
+		}
 		if (!u.n) return
 		for (const n of u.n) {
 			// 传入实际频率 hz，跳过 EDO 量化，精确恢复音高（避免改 EDO 后 Ctrl+Z 导致所有音变化）

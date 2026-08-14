@@ -103,6 +103,17 @@ export const Select = {
 					if (this._hitNote(sub, r)) this.selected.add(sub)
 				}
 			}
+			// 找框内文字（与音符共用 Shift+框选）
+			if (window._textSel) {
+				window._textSel.clear()
+				for (const t of window._textSel.all) {
+					if (this._hitText(t, r)) {
+						window._textSel.selected.add(t)
+						t.highlight(true)
+					}
+				}
+				window._textlayer?.draw()
+			}
 			this._highlight()
 			clearTimeout(this._preventTimer)
 			// 框选到音符：延长禁止创建；空框：短时间禁止
@@ -122,6 +133,24 @@ export const Select = {
 			abs.x + note.len > rect.x &&
 			abs.y < rect.y + rect.height &&
 			abs.y + 10 > rect.y
+		)
+	},
+
+	// 碰撞检测：判断文字是否与矩形选区相交
+	// 衝突判定：テキストが矩形選択範囲と交差するかを判定
+	// Hit test: check if a text note intersects with the selection rectangle
+	_hitText(textNote, rect) {
+		if (!textNote.konva || !textNote.html) return false
+		const abs = textNote.konva.absolutePosition()
+		const x = abs.x
+		const y = abs.y
+		const w = textNote.html.offsetWidth || 10
+		const h = textNote.html.offsetHeight || 10
+		return (
+			x < rect.x + rect.width &&
+			x + w > rect.x &&
+			y < rect.y + rect.height &&
+			y + h > rect.y
 		)
 	},
 

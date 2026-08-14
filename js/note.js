@@ -372,6 +372,10 @@ export class RootNote extends Note {
 			if (window._sel?.selected?.size > 1 && window._sel.selected.has(this)) {
 				window._sel._startGroupDrag()
 			}
+			// 同时选中文字时，记录文字初始位置，拖动音符时一起动
+			if (window._textSel?.selected?.size > 0) {
+				window._textSel._startGroupDrag()
+			}
 			// Ctrl+拖拽：记录整个和弦树状态
 			this._ctrlChordDrag = e.evt.ctrlKey
 			if (this._ctrlChordDrag) {
@@ -427,6 +431,15 @@ export class RootNote extends Note {
 					if (window._sel?._groupRef) {
 						window._sel._syncGroupMove(this, this.x(), this.y())
 					}
+					// 同步移动选中的文字
+					if (window._textSel?._groupRef) {
+						const dx = this.x() - this.origX
+						const dy = this.y() - this.origY
+						for (const [t, r] of window._textSel._groupRef) {
+							t.konva.position({ x: r.x + dx, y: r.y + dy })
+							t.syncHtmlPosition()
+						}
+					}
 					break
 			}
 		})
@@ -449,6 +462,9 @@ export class RootNote extends Note {
 			// 选中组拖动结束
 			if (window._sel?._groupRef) {
 				window._sel._endGroupDrag()
+			}
+			if (window._textSel?._groupRef) {
+				window._textSel._endGroupDrag()
 			}
 		})
 
@@ -604,6 +620,10 @@ export class SubNote extends Note {
 			if (window._sel?.selected?.size > 1 && window._sel.selected.has(this)) {
 				window._sel._startGroupDrag()
 			}
+			// 同时选中文字时，记录文字初始位置，拖动音符时一起动
+			if (window._textSel?.selected?.size > 0) {
+				window._textSel._startGroupDrag()
+			}
 			// Ctrl+拖拽子音：重定向到根音，记录整个和弦树状态
 			this._ctrlChordDrag = e.evt.ctrlKey
 			if (this._ctrlChordDrag) {
@@ -673,6 +693,14 @@ export class SubNote extends Note {
 						if (window._sel?._groupRef) {
 							window._sel._syncGroupMove(this, this.x(), this.y())
 						}
+						// 同步移动选中的文字
+						if (window._textSel?._groupRef) {
+							const dx = this.pitchline.x() - this.origX
+							for (const [t, r] of window._textSel._groupRef) {
+								t.konva.position({ x: r.x + dx, y: r.y })
+								t.syncHtmlPosition()
+							}
+						}
 						break
 				}
 			}
@@ -693,6 +721,9 @@ export class SubNote extends Note {
 			if (window._sel?._groupRef) {
 				window._sel._endGroupDrag()
 			}
+			if (window._textSel?._groupRef) {
+				window._textSel._endGroupDrag()
+			}
 		})
 
 		this.link = new Konva.Group({
@@ -711,6 +742,7 @@ export class SubNote extends Note {
 			history.snapshot()
 		})
 		this.linkLine.on('dragmove', e => {
+			e.cancelBubble = true  // 阻止冒泡到子音符，避免拖维度线时触发子音符拖动导致音高变化
 			this.linkLine.y(0)  // 垂直锁定，仅水平移动
 			// 实时让裁剪区域跟随当前偏移，保证整条线可见
 			const shift = this.linkLine.x() - (this.len * this.interval.t + this.delay)
@@ -722,6 +754,7 @@ export class SubNote extends Note {
 			})
 		})
 		this.linkLine.on('dragend', e => {
+			e.cancelBubble = true
 			this._linkShiftX = this.linkLine.x() - (this.len * this.interval.t + this.delay)
 			this.stage.isNoteDragging = false
 		})

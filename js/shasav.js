@@ -13,6 +13,7 @@ import { i18n, t } from './i18n.js';
 import { bindKeys } from './keybinds.js';
 import { exportMidi, exportMidi12TET, exportMidiMicrotonal, exportMidiCustomEDO, exportWav, importMidi, importMidiMicrotonal } from './midi.js';
 import { Select } from './selection.js';
+import './text.js';  // 文字注释模块（自包含初始化）
 
 // 初始化键盘绑定和选区模块 // キーバインドと選択モジュールを初期化 // Initialize keyboard bindings and selection module
 bindKeys()
@@ -388,6 +389,7 @@ $('#undo-btn').addEventListener('click', e => {
 $('#clear-btn').addEventListener('click', e => {
 	history.snapshot()
 	rootlayer.destroyChildren()
+	if (window._textSel) window._textSel.clearAll()
 	rootlayer.draw()
 	grid.autoLoop()
 })
