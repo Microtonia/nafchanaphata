@@ -124,10 +124,16 @@ function renderText(text) {
 	return text
 }
 
+// 转义 HTML 特殊字符（纯文本 → 安全 HTML） // HTML 特殊文字をエスケープ（プレーンテキスト→安全な HTML）
+function escapeHtml(s) {
+	return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+}
+
 // 文字节点类 // テキストノードクラス // Text node class
 export class TextNote {
 	constructor(text, x, y, opts = {}) {
 		this.text = text ?? ''
+		this.htmlText = opts.htmlText || ''  // 富文本 HTML（支持每段不同字体/大小/颜色）
 		this.fill = opts.fill || '#ffffff'
 		this.fontSize = opts.fontSize || 30
 		this.fontFamily = opts.fontFamily || 'Arial'
@@ -145,7 +151,7 @@ export class TextNote {
 		// HTML 元素渲染文字
 		this.html = document.createElement('div')
 		this.html.className = 'text-note-html'
-		this.html.style.cssText = 'position:absolute;left:0;top:0;transform-origin:left top;pointer-events:none;cursor:move;white-space:pre;line-height:1.2;user-select:none;letter-spacing:normal;'
+		this.html.style.cssText = 'position:absolute;left:0;top:0;transform-origin:left top;pointer-events:none;cursor:move;white-space:pre;line-height:1;user-select:none;letter-spacing:normal;'
 		textHtmlLayer.appendChild(this.html)
 
 		this.applyHtml()
@@ -198,10 +204,17 @@ export class TextNote {
 
 	// 应用文字内容与样式到 HTML // テキスト内容とスタイルを HTML に適用
 	applyHtml() {
-		this.html.textContent = this.text
+		// 默认样式（无 span 的文字继承）
 		this.html.style.color = this.fill
 		this.html.style.fontSize = this.fontSize + 'px'
 		this.html.style.fontFamily = '"' + this.fontFamily + '", sans-serif'
+		// 内容
+		if (this.htmlText) {
+			// 富文本：直接渲染 HTML（每个 span 自带样式，覆盖默认）
+			this.html.innerHTML = this.htmlText
+		} else {
+			this.html.textContent = this.text
+		}
 		this.syncHtmlPosition()
 		// 更新命中区域尺寸
 		this.hitRect.width(this.html.offsetWidth || 10)
@@ -209,8 +222,9 @@ export class TextNote {
 	}
 
 	// 应用样式与内容 // スタイルと内容を適用 // Apply style and content
-	applyStyle(text, fill, fontSize, fontFamily) {
-		this.text = text
+	applyStyle(htmlText, text, fill, fontSize, fontFamily) {
+		this.htmlText = htmlText || ''
+		this.text = text || ''
 		this.fill = fill
 		this.fontSize = fontSize
 		this.fontFamily = fontFamily
@@ -261,7 +275,8 @@ export class TextNote {
 	toJSON() {
 		return {
 			x: this.konva.x(), y: this.konva.y(),
-			text: this.text, fill: this.fill,
+			text: this.text, htmlText: this.htmlText,
+			fill: this.fill,
 			fontSize: this.fontSize, fontFamily: this.fontFamily
 		}
 	}
@@ -383,7 +398,8 @@ export const TextSel = {
 	// 打开编辑弹窗 // 編集ポップアップを開く // Open editor
 	openEditor(t) {
 		this._editing = t
-		$('#text-edit-content').value = t.text
+		const editor = $('#text-edit-content')
+		editor.innerHTML = t.htmlText || escapeHtml(t.text)
 		$('#text-edit-color').value = t.fill
 		$('#text-edit-size').value = t.fontSize
 		$('#text-edit-size-val').textContent = t.fontSize
@@ -404,13 +420,15 @@ export const TextSel = {
 	applyEditor() {
 		const t = this._editing
 		if (!t) return
-		const text = $('#text-edit-content').value
+		const editor = $('#text-edit-content')
+		const htmlText = editor.innerHTML
+		const text = editor.textContent
 		const fill = $('#text-edit-color').value
 		const fontSize = parseInt($('#text-edit-size').value) || 30
 		const fontIdx = parseInt($('#text-edit-font').value) || 0
 		const fontFamily = FONTS[fontIdx]?.family || 'Arial'
 		history.snapshot()
-		t.applyStyle(text, fill, fontSize, fontFamily)
+		t.applyStyle(htmlText, text, fill, fontSize, fontFamily)
 		this.closeEditor()
 	},
 
@@ -496,12 +514,23 @@ if (document.fonts) {
 }
 
 // 弹窗事件绑定 // ポップアップイベントバインド // Bind popup events
+$('#text-edit-content').addEventListener('mouseup', saveEditorSelection)
+$('#text-edit-content').addEventListener('keyup', saveEditorSelection)
 $('#text-edit-size').addEventListener('input', e => {
-	$('#text-edit-size-val').textContent = e.target.value
+	const size = parseInt(e.target.value) || 30
+	$('#text-edit-size-val').textContent = size
+	applyStyleToSelection('font-size: ' + size + 'px')
+	syncTextareaFont()
 })
 $('#text-edit-font').addEventListener('input', e => {
 	const idx = parseInt(e.target.value)
+	const family = FONTS[idx]?.family || 'Arial'
 	$('#text-edit-font-val').textContent = FONTS[idx]?.label || ''
+	applyStyleToSelection('font-family: "' + family + '", sans-serif')
+	syncTextareaFont()
+})
+$('#text-edit-color').addEventListener('input', e => {
+	applyStyleToSelection('color: ' + e.target.value)
 	syncTextareaFont()
 })
 $('#text-edit-ok-btn').addEventListener('click', () => TextSel.applyEditor())
@@ -532,13 +561,41 @@ document.addEventListener('keydown', e => {
 	}
 })
 
-// 同步文本框字体与字体滑块 // テキストボックスのフォントをスライダーに同期 // Sync textarea font with the font slider
+// 同步文本框默认样式（字体/大小/颜色） // テキストボックスのデフォルトスタイルを同期
 function syncTextareaFont() {
-	const ta = $('#text-edit-content')
-	if (!ta) return
+	const editor = $('#text-edit-content')
+	if (!editor) return
 	const idx = parseInt($('#text-edit-font').value) || 0
 	const family = FONTS[idx]?.family || 'Arial'
-	ta.style.fontFamily = '"' + family + '", sans-serif'
+	const size = parseInt($('#text-edit-size').value) || 30
+	const color = $('#text-edit-color')?.value || '#ffffff'
+	editor.style.fontFamily = '"' + family + '", sans-serif'
+	editor.style.fontSize = size + 'px'
+	editor.style.color = color
+}
+
+// 缓存的选区（点击滑块/颜色控件时 contenteditable 选区会丢失，这里缓存）
+// キャッシュされた選択範囲（スライダー/カラー操作で contenteditable の選択が失われるためキャッシュ）
+let _savedRange = null
+function saveEditorSelection() {
+	const sel = window.getSelection()
+	if (sel.rangeCount && !sel.getRangeAt(0).collapsed) {
+		_savedRange = sel.getRangeAt(0).cloneRange()
+	}
+}
+
+// 应用 CSS 样式到缓存的选中文本范围 // キャッシュ済み選択範囲に CSS スタイルを適用
+function applyStyleToSelection(cssText) {
+	if (!_savedRange) return
+	const range = _savedRange
+	const span = document.createElement('span')
+	span.style.cssText = cssText
+	const frag = range.extractContents()
+	span.appendChild(frag)
+	range.insertNode(span)
+	const nr = document.createRange()
+	nr.selectNodeContents(span)
+	_savedRange = nr
 }
 
 // 构建符号选择网格 // 記号選択グリッドを構築 // Build symbol selection grid
@@ -571,13 +628,23 @@ function buildSymbolGrid() {
 
 // 插入符号到文字内容并切换字体 // 記号をテキスト内容に挿入しフォントを切替 // Insert symbol into text content and switch font
 function insertSymbol(g) {
-	const ta = $('#text-edit-content')
-	const start = ta.selectionStart ?? ta.value.length
-	const end = ta.selectionEnd ?? ta.value.length
-	ta.value = ta.value.slice(0, start) + g.char + ta.value.slice(end)
-	ta.focus()
-	const pos = start + g.char.length
-	ta.setSelectionRange(pos, pos)
+	const editor = $('#text-edit-content')
+	editor.focus()
+	const span = document.createElement('span')
+	span.style.fontFamily = '"' + g.font + '", sans-serif'
+	span.textContent = g.char
+	const sel = window.getSelection()
+	if (sel.rangeCount) {
+		const range = sel.getRangeAt(0)
+		range.deleteContents()
+		range.insertNode(span)
+		range.setStartAfter(span)
+		range.collapse(true)
+		sel.removeAllRanges()
+		sel.addRange(range)
+	} else {
+		editor.appendChild(span)
+	}
 	// 切换字体到该符号对应字体
 	const idx = FONTS.findIndex(f => f.family === g.font)
 	if (idx >= 0) {

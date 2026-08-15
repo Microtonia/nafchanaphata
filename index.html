@@ -725,7 +725,7 @@
 <div class="modal" id="text-edit-modal">
 	<div class="modal-content" style="max-width:500px; background:#2a2a3e; color:#ddd; border-radius:8px; padding:16px;">
 		<h5 data-i18n="text-title" style="margin-top:0">文字</h5>
-		<textarea id="text-edit-content" rows="3" style="width:100%;background:#3a3a56;color:#fff;border:1px solid #555;border-radius:4px;padding:6px;font-size:13px;resize:vertical;box-sizing:border-box;" placeholder="输入文字..."></textarea>
+		<div id="text-edit-content" contenteditable="true" style="width:100%;min-height:60px;max-height:200px;overflow-y:auto;background:#3a3a56;color:#fff;border:1px solid #555;border-radius:4px;padding:6px;font-size:13px;box-sizing:border-box;white-space:pre-wrap;line-height:1.4;" data-placeholder="输入文字..."></div>
 		<div style="display:flex;gap:12px;align-items:center;margin:10px 0 8px;">
 			<span data-i18n="text-color" style="font-size:12px;white-space:nowrap;">颜色</span>
 			<input id="text-edit-color" type="color" value="#ffffff" style="width:40px;height:28px;background:transparent;border:1px solid #555;border-radius:4px;cursor:pointer;padding:0;">

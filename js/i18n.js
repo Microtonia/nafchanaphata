@@ -203,7 +203,15 @@ const tr = {
 <p>使用する次元（1d〜7d）を選択、オクターブは常時使用可能</p>
 <p>誤差（cents）と最大ステップ数を設定</p>
 <p>接続開始 — 同じ開始時刻・音価の音符を次元経路で接続しコード化</p>
-<p>中継音（経路上の中間ノート）は破線で表示</p>`
+<p>中継音（経路上の中間ノート）は破線で表示</p>
+<h4>テキスト注釈</h4>
+<p><kbd>W</kbd> — 画面中央にテキストを追加</p>
+<p>テキストをダブルクリック — 編集ポップアップを開く</p>
+<p>記号クリック — 対応するフォントを自動使用</p>
+<p>テキスト断片を選択後、フォント/サイズ/カラーの各コントロールでその断片のスタイルを変更（リッチテキスト対応）</p>
+<p><kbd>Shift</kbd> + クリック / ドラッグ — テキスト複数選択（音符と共通の範囲選択）</p>
+<p>音符とテキストを同時選択時、ドラッグ・コピー・貼り付け・切り取り・削除を一括操作</p>
+<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — 音符とテキストを全選択</p>`
 	},
 	'en': {
 		"prog": "[Progress]",
@@ -378,7 +386,15 @@ const tr = {
 <p>Choose dimensions (1d~7d), octave always available</p>
 <p>Set error tolerance (cents) and max steps</p>
 <p>Connect — links notes with same start time & duration into a chord via dimension paths</p>
-<p>Relay notes (intermediate path nodes) shown as dashed lines</p>`
+<p>Relay notes (intermediate path nodes) shown as dashed lines</p>
+<h4>Text Annotation</h4>
+<p><kbd>W</kbd> — add text at screen center</p>
+<p>Double-click text — open editor</p>
+<p>Click a symbol — automatically uses its corresponding font</p>
+<p>Select a text fragment, then use font/size/color controls to restyle it (rich text)</p>
+<p><kbd>Shift</kbd> + click / drag — multi-select text (shared with note marquee)</p>
+<p>When notes and text are selected together, drag/copy/paste/cut/delete act on both</p>
+<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — select all notes and text</p>`
 	},
 	'zh': {
 		"prog": "［进行］",
@@ -553,7 +569,15 @@ const tr = {
 <p>选择可用维度（1d~7d），八度始终可用</p>
 <p>设置误差（音分）和最大步数</p>
 <p>开始连接 — 将同时开始、同时值音符通过维度路径连接为和弦</p>
-<p>中继音（路径上的中间音符）以虚线显示</p>`
+<p>中继音（路径上的中间音符）以虚线显示</p>
+<h4>文字注释</h4>
+<p><kbd>W</kbd> — 在屏幕中央添加文字</p>
+<p>双击文字 — 打开编辑弹窗</p>
+<p>点击符号 — 自动使用该符号对应的字体</p>
+<p>选中文字片段后，用字体/大小/颜色控件修改该片段样式（支持富文本）</p>
+<p><kbd>Shift</kbd> + 点击 / 拖拽 — 多选文字（与音符共用框选）</p>
+<p>同时选中音符和文字时，拖动、复制、粘贴、剪切、删除会一起操作</p>
+<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — 全选音符和文字</p>`
 	},
 	'sf': {
 		"prog": "[Clyftach]",
