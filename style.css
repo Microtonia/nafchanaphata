@@ -14,6 +14,10 @@
 	font-family: "Linshiziti";
 	src: url("assets/fonts/%E4%B8%B4%E6%97%B6%E5%AD%97%E4%BD%93.ttf");
 }
+@font-face {
+	font-family: "LapisiaA";
+	src: url("assets/fonts/LapisiaA-Elegant.woff");
+}
 :root {
 	--font-icon: "Material Symbols Rounded";
 }

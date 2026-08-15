@@ -37,6 +37,7 @@ export const FONTS = [
 	{ family: 'Fglyph', label: 'Fglyph' },
 	{ family: 'ShasavMusic', label: 'Shasav' },
 	{ family: 'Linshiziti', label: '临时字体' },
+	{ family: 'LapisiaA', label: 'LapisiaA' },
 ]
 
 // 可选符号列表：Fglyph 取 #2→#134，ShasavMusic 取 #11→#44（其余符号不用）
