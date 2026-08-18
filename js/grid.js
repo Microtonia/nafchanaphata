@@ -30,7 +30,8 @@ export class Grid extends Konva.Layer {
 		this.scorelines4 = new Konva.Group()
 		this.beatlines = new Konva.Group()
 		this.edolines = new Konva.Group()
-		this.tonicline = new Konva.Line()
+		this.scalelines = new Konva.Group()
+		this.tonicline = new Konva.Group()
 		
 		this.indicator = new Konva.Line({
 			strokeWidth: 1,
@@ -106,7 +107,7 @@ export class Grid extends Konva.Layer {
 		})
 		this.setLoop()
 		
-		this.add(this.edolines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
+		this.add(this.edolines, this.scalelines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
 		// 非交互元素禁用 hit 检测，减少大量网格线的碰撞计算 / 非インタラクティブ要素のヒット検出を無効化し、大量のグリッド線の衝突計算を削減 / Disable hit detection on non-interactive elements to reduce collision checks
 		this.scorelines.listening(false)
 		this.scorelines2.listening(false)
@@ -114,6 +115,7 @@ export class Grid extends Konva.Layer {
 		this.scorelines4.listening(false)
 		this.beatlines.listening(false)
 		this.edolines.listening(false)
+		this.scalelines.listening(false)
 		this.tonicline.listening(false)
 		this.indicator.listening(false)
 		this.drawScorelines()
@@ -175,101 +177,124 @@ export class Grid extends Konva.Layer {
 		this.drawBeatlines()
 	}
 
-	// 绘制音高谱线（1d~4d维度，根据复选框开关）/ ピッチスコアラインを描画（1d〜4d次元、チェックボックスで切替）/ Draw pitch score-lines (1d~4d dimensions, toggled by checkboxes)
+	// 获取某类符号的分段边界（返回 [{startX, endX, value}]）
+	// 記号のセクション境界を取得
+	_getSections(symbolType, globalValue) {
+		const bounds = [{ x: -1e7, value: globalValue }]
+		for (const d of (window._staffDirectives || [])) {
+			if (d.type === symbolType) bounds.push({ x: d.x, value: d.value })
+		}
+		bounds.sort((a, b) => a.x - b.x)
+		const sections = []
+		for (let i = 0; i < bounds.length; i++) {
+			sections.push({ startX: bounds[i].x, endX: bounds[i + 1] ? bounds[i + 1].x : 1e7, value: bounds[i].value })
+		}
+		return sections
+	}
+	// 查询 x 位置生效的分段值
+	_sectionValueAt(sections, x) {
+		let val = null
+		for (const sec of sections) {
+			if (sec.startX <= x) val = sec.value
+		}
+		return val
+	}
+	// 画分段横线：每段用该段 tonic 画间隔为 interval 的横线（绝对内容坐标，x 限制在段范围内）
+	_drawSectionedLines(group, sections, interval, color, width) {
+		const half = Math.ceil(window.innerHeight / this.stage.scaleY() / interval) + 1
+		for (const sec of sections) {
+			const tonic = sec.value || this.tonic
+			const tonicY = hz2y(tonic)
+			if (!tonicY) continue
+			for (let i = -half; i <= half; i++) {
+				group.add(new Konva.Line({
+					points: [sec.startX, tonicY + interval * i, sec.endX, tonicY + interval * i],
+					strokeWidth: width,
+					stroke: color
+				}))
+			}
+		}
+	}
+	// 绘制音高谱线（1d~4d维度，按 tonic 符号分段）
 	drawScorelines() {
 		this.scorelines.destroyChildren()
 		this.scorelines2.destroyChildren()
 		this.scorelines3.destroyChildren()
 		this.scorelines4.destroyChildren()
 		if (!this.tonic) return
-		
-		if ($('#config-scoreline-1d').checked) {
-			// 1D scorelines: tonic * 2^n（八度）
-			const lineCount = Math.ceil(window.innerHeight / this.stage.scaleY() / this.octave) + 1
-			for (const i of range(lineCount)) {
-				this.scorelines.add(new Konva.Line({
-					x: 0,
-					y: this.octave * i,
-					points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
-					strokeWidth: 3,
-					stroke: '#7e7d93'
-				}))
-			}
-		}
-		
-		if ($('#config-scoreline-2d').checked) {
-			// 2D scoreline: tonic * (3/2)^n（五度）
-			const lineCount2 = Math.ceil(window.innerHeight / this.stage.scaleY() / this._2dInterval) + 1
-			for (const i of range(lineCount2)) {
-				this.scorelines2.add(new Konva.Line({
-					x: 0,
-					y: this._2dInterval * i,
-					points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
-					strokeWidth: 3,
-					stroke: '#8c6f88'
-				}))
-			}
-		}
 
-		if ($('#config-scoreline-3d').checked) {
-			// 3D scoreline: tonic * (5/4)^n（大三度）- 绿色
-			const lineCount3 = Math.ceil(window.innerHeight / this.stage.scaleY() / this._3dInterval) + 1
-			for (const i of range(lineCount3)) {
-				this.scorelines3.add(new Konva.Line({
-					x: 0,
-					y: this._3dInterval * i,
-					points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
-					strokeWidth: 3,
-					stroke: '#6cd985'
-				}))
-			}
-		}
+		const sections = this._getSections('tonic', this.tonic)
+		if ($('#config-scoreline-1d').checked) this._drawSectionedLines(this.scorelines, sections, this.octave, '#7e7d93', 3)
+		if ($('#config-scoreline-2d').checked) this._drawSectionedLines(this.scorelines2, sections, this._2dInterval, '#8c6f88', 3)
+		if ($('#config-scoreline-3d').checked) this._drawSectionedLines(this.scorelines3, sections, this._3dInterval, '#6cd985', 3)
+		if ($('#config-scoreline-4d').checked) this._drawSectionedLines(this.scorelines4, sections, this._4dInterval, '#b598ee', 3)
 
-		if ($('#config-scoreline-4d').checked) {
-			// 4D scoreline: tonic * (7/4)^n（和声七度）- 淡紫色
-			const lineCount4 = Math.ceil(window.innerHeight / this.stage.scaleY() / this._4dInterval) + 1
-			for (const i of range(lineCount4)) {
-				this.scorelines4.add(new Konva.Line({
-					x: 0,
-					y: this._4dInterval * i,
-					points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
-					strokeWidth: 3,
-					stroke: '#b598ee'
-				}))
-			}
+		// 主音线：按 tonic 符号分段，每段在对应 tonic 处画一条粗横线
+		this.tonicline.destroyChildren()
+		for (const sec of sections) {
+			const t = sec.value || this.tonic
+			const ty = hz2y(t)
+			if (!ty) continue
+			this.tonicline.add(new Konva.Line({
+				points: [sec.startX, ty, sec.endX, ty],
+				strokeWidth: 3,
+				stroke: '#b5b4c2'
+			}))
 		}
-		
-		this.tonicline.setAttrs({
-			x: 0,
-			y: 0,
-			points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
-			strokeWidth: 3,
-			stroke: '#b5b4c2'
-		})
 		this.drawEdoLines()
 		this.adjust()
 	}
 
-	// 绘制 EDO 谱线：八度等分为 EDO 份的半透明横线（勾选 config-edo-lines 时显示）
-	// EDO譜線を描画：オクターブをEDO等分した半透明の横線（config-edo-linesチェック時に表示）
-	// Draw EDO lines: translucent horizontal lines dividing the octave into EDO equal steps
+	// 绘制 EDO 谱线：八度等分为 EDO 份的半透明横线（按 edo 符号分段，可超越全局 EDO）
 	drawEdoLines() {
 		this.edolines.destroyChildren()
 		const check = $('#config-edo-lines')?.checked
 		if (!check) return
-		const edo = parseInt($('#config-edo').value)
-		if (!edo || edo < 2) return
-		const step = this.octave / edo  // 每个音高步的像素高度
-		const lineCount = Math.ceil(window.innerHeight / this.stage.scaleY() / step) + 1
-		for (const i of range(lineCount)) {
-			this.edolines.add(new Konva.Line({
-				x: 0,
-				y: step * i,
-				points: [0, 0, window.innerWidth / this.stage.scaleX(), 0],
-				strokeWidth: 0.5,
-				stroke: '#ffffff',
-				opacity: 0.12
-			}))
+		const globalEdo = parseInt($('#config-edo').value) || 12
+		const sections = this._getSections('edo', globalEdo)
+		const tonicSections = this._getSections('tonic', this.tonic)
+		for (const sec of sections) {
+			const edo = (sec.value >= 2) ? sec.value : 12
+			const step = this.octave / edo  // 每个音高步的像素高度
+			const tonic = this._sectionValueAt(tonicSections, sec.startX) || this.tonic
+			const tonicY = hz2y(tonic)
+			const half = Math.ceil(window.innerHeight / this.stage.scaleY() / step) + 1
+			for (let i = -half; i <= half; i++) {
+				this.edolines.add(new Konva.Line({
+					points: [sec.startX, tonicY + step * i, sec.endX, tonicY + step * i],
+					strokeWidth: 0.5,
+					stroke: '#ffffff',
+					opacity: 0.12
+				}))
+			}
+		}
+	}
+
+	// 绘制调式谱线：调式内音的半透明横线（按调式段分段，每段使用对应调式内音）
+	drawScaleLines() {
+		this.scalelines.destroyChildren()
+		if (!$('#config-scale-lines')?.checked) return
+		const colorLines = $('#config-scale-color')?.checked
+		const segments = window._scale?.segments || [{ startX: -1e7, tones: window._scale?.tones || [] }]
+		const lineCount = Math.ceil(window.innerHeight / this.stage.scaleY() / 100) + 2
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i]
+			const s = (seg.startX === -Infinity) ? -1e7 : seg.startX
+			const e = (segments[i + 1] ? (segments[i + 1].startX === -Infinity ? -1e7 : segments[i + 1].startX) : 1e7)
+			if (s >= e) continue
+			const tones = seg.tones || []
+			if (!tones.length) continue
+			for (const t of tones) {
+				const yMod = ((hz2y(t.hz) % 100) + 100) % 100
+				for (let k = -1; k < lineCount; k++) {
+					this.scalelines.add(new Konva.Line({
+						points: [s, yMod + 100 * k, e, yMod + 100 * k],
+						strokeWidth: 0.8,
+						stroke: colorLines ? t.color : '#ffffff',
+						opacity: 0.35
+					}))
+				}
+			}
 		}
 	}
 	
@@ -318,33 +343,26 @@ export class Grid extends Konva.Layer {
 	}
 	// 仅更新位置（画布平移/缩放时调用） / 位置のみ更新（キャンバス移動・ズーム時に呼出） / Adjust positions only (called on canvas pan/zoom)
 	adjust() {
-		const tonicY = hz2y(this.tonic)
-		const top = tonicY - Math.floor((tonicY + this.stage.y() / this.stage.scaleY()) / this.octave) * this.octave
-		const top2 = tonicY - Math.floor((tonicY + this.stage.y() / this.stage.scaleY()) / this._2dInterval) * this._2dInterval
-		const top3 = tonicY - Math.floor((tonicY + this.stage.y() / this.stage.scaleY()) / this._3dInterval) * this._3dInterval
-		const top4 = tonicY - Math.floor((tonicY + this.stage.y() / this.stage.scaleY()) / this._4dInterval) * this._4dInterval
-		this.scorelines.x(-this.stage.x() / this.stage.scaleX())
-		this.scorelines2.x(-this.stage.x() / this.stage.scaleX())
-		this.scorelines3.x(-this.stage.x() / this.stage.scaleX())
-		this.scorelines4.x(-this.stage.x() / this.stage.scaleX())
-		this.tonicline.x(-this.stage.x() / this.stage.scaleX())
-		this.scorelines.y(top)
-		this.scorelines2.y(top2)
-		this.scorelines3.y(top3)
-		this.scorelines4.y(top4)
-		this.tonicline.y(tonicY)
+		// 分段谱线使用绝对内容坐标，group 不平移（Konva 随 stage 平移/缩放自动显示）
+		this.scorelines.x(0)
+		this.scorelines.y(0)
+		this.scorelines2.x(0)
+		this.scorelines2.y(0)
+		this.scorelines3.x(0)
+		this.scorelines3.y(0)
+		this.scorelines4.x(0)
+		this.scorelines4.y(0)
+		this.edolines.x(0)
+		this.edolines.y(0)
+		this.scalelines.x(0)
+		this.scalelines.y(0)
+		this.tonicline.x(0)
+		this.tonicline.y(0)
 
-		// EDO 谱线：对齐到 tonic 的等分网格
-		const edo = parseInt($('#config-edo').value)
-		const edoStep = this.octave / (edo >= 2 ? edo : 12)
-		const topEdo = tonicY - Math.floor((tonicY + this.stage.y() / this.stage.scaleY()) / edoStep) * edoStep
-		this.edolines.x(-this.stage.x() / this.stage.scaleX())
-		this.edolines.y(topEdo)
-		
 		const left = Math.floor(-this.stage.x() / this.stage.scaleX() / 48) * 48
 		this.beatlines.x(left)
 		this.beatlines.y(-this.stage.y() / this.stage.scaleY())
-		
+
 		this.loopStart.y(-this.stage.y() / this.stage.scaleY() + 15)
 		this.loopEnd.y(-this.stage.y() / this.stage.scaleY() + 15)
 	}

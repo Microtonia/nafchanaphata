@@ -4,7 +4,7 @@
  * Main application module: initialization, keyboard bindings, Config panel, custom dimension system, ext shortcuts, import/export and zoom control
  */
 
-import { $, $$, pitchIntervals, x2t, OFFSET } from './util.js';
+import { $, $$, pitchIntervals, x2t, hz2y, OFFSET } from './util.js';
 import { Serializer } from './serialize.js';
 import history from './history.js';
 import { switchTones } from './sound.js';
@@ -14,6 +14,7 @@ import { bindKeys } from './keybinds.js';
 import { exportMidi, exportMidi12TET, exportMidiMicrotonal, exportMidiCustomEDO, exportWav, importMidi, importMidiMicrotonal } from './midi.js';
 import { Select } from './selection.js';
 import './text.js';  // 文字注释模块（自包含初始化）
+import './staff.js';  // 谱表符号模块（自包含初始化）
 
 // 初始化键盘绑定和选区模块 // キーバインドと選択モジュールを初期化 // Initialize keyboard bindings and selection module
 bindKeys()
@@ -120,6 +121,134 @@ $('#config-edo-lines').addEventListener('change', function(e) {
 })
 $('#config-edo').addEventListener('change', function(e) {
 	grid.drawEdoLines()
+})
+
+// === 调式（scale）系统：选中和弦的音作为调式内音 ===
+// === 調式システム：選択した和音の音を調式内音とする ===
+// === Scale system: notes of selected chords become scale tones ===
+window._scale = { segments: [{ startX: -Infinity, tones: [] }], tones: [] }
+
+// 获取 x 位置对应的调式段对象 // x位置に対応する調式セグメントを取得
+function scaleSegmentAt(x) {
+	const segs = window._scale.segments
+	let cur = segs[0]
+	for (const seg of segs) { if (seg.startX <= x) cur = seg }
+	return cur
+}
+
+// 收集调式内音：遍历选中和弦的所有音（排除中继音虚线），记录音高与维度线颜色
+// 相差 ≤ 1 cent 的音视为同一个音（合并）；写入选中和弦所在调式段（区域独立，互不影响）
+function collectScale() {
+	const tones = []
+	const roots = new Set()
+	let segX = null
+	for (const n of window._sel?.selected || []) {
+		const root = n.root
+		if (!root || root.type !== 'root' || roots.has(root)) continue
+		roots.add(root)
+		if (segX == null) segX = root.x()
+		for (const d of root.getDescendants()) {
+			// 排除虚线音符（中继音 [8,6]、静音 [10,7] 等所有 dash 非空）
+			const dash = d.pitchline && d.pitchline.dash()
+			const isDashed = Array.isArray(dash) && dash.length > 0
+			if (isDashed) continue
+			const hz = d._hz || d.hz
+			if (!hz) continue
+			// 与已有音高相差 ≤ 1 cent 视为同一个音（合并）
+			let merged = false
+			for (const t of tones) {
+				if (Math.abs(1200 * Math.log2(hz / t.hz)) <= 1) { merged = true; break }
+			}
+			if (merged) continue
+			tones.push({ hz, color: d.interval?.c || '#ffffff' })
+		}
+	}
+	const seg = segX != null ? scaleSegmentAt(segX) : window._scale.segments[window._scale.segments.length - 1]
+	seg.tones = tones
+	window._scale.tones = tones
+	grid.drawScaleLines()
+	return tones
+}
+
+// 根据 x 位置获取对应调式段的 tones // x位置に対応する調式セグメントのtonesを取得
+function scaleTonesAt(x) {
+	if (x == null) return window._scale.tones
+	return scaleSegmentAt(x).tones || []
+}
+
+// 吸附 y 坐标到最近的调式内音（含八度转位；x 决定使用哪个调式段）
+function snapToScale(y, x) {
+	const tones = scaleTonesAt(x)
+	if (!tones.length) return y
+	const pc = ((y % 100) + 100) % 100
+	let best = null
+	for (const t of tones) {
+		const tp = ((hz2y(t.hz) % 100) + 100) % 100
+		let d = Math.abs(pc - tp)
+		d = Math.min(d, 100 - d)
+		if (best === null || d < best.d) best = { d, tp }
+	}
+	let dy = best.tp - pc
+	if (dy > 50) dy -= 100
+	if (dy < -50) dy += 100
+	return y + dy
+}
+window._collectScale = collectScale
+window._snapToScale = snapToScale
+window._scaleTonesAt = scaleTonesAt
+
+// 根据 ChangeScale 指令重建调式段（符号后调式清零，符号前不受影响）
+function refreshScaleSegments() {
+	const bounds = [-Infinity]
+	for (const d of (window._staffDirectives || [])) {
+		if (d.type === 'scale') bounds.push(d.x)
+	}
+	bounds.sort((a, b) => a - b)
+	const oldSegs = window._scale.segments || []
+	const newSegs = []
+	for (const b of bounds) {
+		let tones = []
+		for (const os of oldSegs) {
+			if (os.startX === b || Math.abs(os.startX - b) < 1) { tones = os.tones; break }
+		}
+		newSegs.push({ startX: b, tones })
+	}
+	window._scale.segments = newSegs
+	window._scale.tones = newSegs[newSegs.length - 1]?.tones || []
+	grid.drawScaleLines()
+}
+window._refreshScaleSegments = refreshScaleSegments
+
+// 谱表符号变化时刷新分段谱线
+window._staffChanged = function() {
+	refreshScaleSegments()
+	grid.drawEdoLines()
+	grid.drawScorelines()
+	grid.drawScaleLines()
+}
+
+// D 键：设定调式内音（选中和弦的所有音作为调式内音）
+// Dキー：調式内音を設定（選択和音の全音を調式内音とする）
+// D key: set scale tones (all notes of selected chords become scale tones)
+document.addEventListener('keydown', e => {
+	if (e.key === 'd' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		const el = document.activeElement
+		const tag = el?.tagName
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+		e.preventDefault()
+		collectScale()
+	}
+})
+
+// 调式相关打勾框事件
+$('#config-scale-enable').addEventListener('change', function(e) {
+	// 仅启用/禁用调式限制；调式内音通过「选中和弦后按 D 键」设定
+})
+$('#config-scale-lines').addEventListener('change', function(e) {
+	grid.drawScaleLines()
+})
+$('#config-scale-color').addEventListener('change', function(e) {
+	grid.drawScaleLines()
 })
 // 启用 6d/7d 维度 // 6d/7d 次元を有効化 // Enable 6d/7d dimensions
 $('#config-enable-6d').addEventListener('change', function(e) {
@@ -390,6 +519,7 @@ $('#clear-btn').addEventListener('click', e => {
 	history.snapshot()
 	rootlayer.destroyChildren()
 	if (window._textSel) window._textSel.clearAll()
+	window._parseStaff?.()
 	rootlayer.draw()
 	grid.autoLoop()
 })
@@ -401,7 +531,12 @@ $('#play-pause-btn').addEventListener('click', e => {
 		Tone.Transport.pause()
 		$('#play-pause-btn i').textContent = 'play_arrow'
 	} else {
-		rootlayer.children.map(n => n.buildPart())
+		// 构建全局播放（含力度；循环反复由 seek 跳回实现）
+		window._buildPlayback?.()
+		// 应用谱表符号的分段速度（bpm automation）
+		window._applyStaffTempo?.()
+		// 启动循环节监控（:|| 处 seek 回 ||:，声音与显示一并反复）
+		window._startLoopMonitor?.()
 		if (Tone.Transport.state === 'stopped') {
 			Tone.Transport.seconds = Tone.Transport.loopStart
 		} else if (Tone.Transport.state === 'paused') {
@@ -418,6 +553,7 @@ $('#play-pause-btn').addEventListener('click', e => {
 		// 在loopEnd处自动停止（不依赖loop开关）
 		_stopEventId = Tone.Transport.schedule((time) => {
 			Tone.Transport.stop()
+			window._stopLoopMonitor?.()
 			Tone.Transport.seconds = Tone.Transport.loopStart
 			$('#play-pause-btn i').textContent = 'play_arrow'
 			grid.hideIndicator()
@@ -431,6 +567,7 @@ $('#play-pause-btn').addEventListener('click', e => {
 // 停止并回到开头 // 停止して先頭に戻る // Stop and return to beginning
 $('#skip-btn').addEventListener('click', e => {
 	Tone.Transport.stop()
+	window._stopLoopMonitor?.()
 	Tone.Transport.clear(_stopEventId)
 	Tone.Transport.seconds = Tone.Transport.loopStart
 	$('#play-pause-btn i').textContent = 'play_arrow'

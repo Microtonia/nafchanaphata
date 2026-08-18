@@ -62,18 +62,19 @@ export const tav = (n, d) => {
 	return res
 }
 // 基频量化（EDO等分律） / 基音クオンタイズ（EDO平均律） / Base frequency quantization (EDO equal division)
-export const qb = hz => {
-	const edo = $('#config-edo').value
-	const tonic = $('#config-tonic').value
+// tonic/edo 可显式传入（用于谱表符号分段量化），否则读取全局 Config
+export const qb = (hz, tonic, edo) => {
+	tonic = tonic ?? $('#config-tonic').value
+	edo = edo ?? $('#config-edo').value
 	const base = $('#config-quantize-base').checked
 	if (!edo || !tonic || !base) return hz
 	const step = Math.round(Math.log2(hz / tonic) * edo)
 	return tonic * 2 ** (step / edo)
 }
 // 泛音量化（EDO等分律） / 倍音クオンタイズ（EDO平均律） / Sub-frequency quantization (EDO equal division)
-export const qs = hz => {
-	const edo = $('#config-edo').value
-	const tonic = $('#config-tonic').value
+export const qs = (hz, tonic, edo) => {
+	tonic = tonic ?? $('#config-tonic').value
+	edo = edo ?? $('#config-edo').value
 	const sub = $('#config-quantize-sub').checked
 	if (!edo || !tonic || !sub) return hz
 	const step = Math.round(Math.log2(hz / tonic) * edo)

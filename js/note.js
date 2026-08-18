@@ -271,13 +271,15 @@ export class Note extends Konva.Group {
 	}
 	// 音符数据对象：供 Tone.js 播放使用 // 音符データオブジェクト：Tone.js 再生用 // Note data object: for Tone.js playback
 	get note() {
+		const absX = (this.root ? this.root.x() : this.x()) + (this.delay || 0)
 		return {
 			time: x2t(this.delay) + "i",
 			_time: x2t(this.delay),
 			hz: this._hz || this.hz,
 			len: x2t(this.len) + "i",
 			_len: x2t(this.len),
-			vol: this.volume/100
+			vol: this.volume/100,
+			absX: absX
 		}
 	}
 	get notes() {
@@ -512,10 +514,21 @@ export class RootNote extends Note {
 		this.quantize()
 		this.updateColor()
 	}
-	// 量化：将 Y 坐标吸附到最近的允许频率 // 量子化：Y 座標を最も近い許可周波数にスナップ // Quantize: snap Y coordinate to the nearest allowed frequency
+	// 量化：将 Y 坐标吸附到最近的允许频率（调式启用时吸附到调式内音；否则按分段 tonic/edo 量化）
+	// 量子化：Y 座標を最も近い許可周波数にスナップ（調式有効時は調式内音にスナップ；それ以外はセクションtonic/edoで量子化）
+	// Quantize: snap Y coordinate to nearest allowed frequency (snap to scale tones when scale enabled)
 	quantize() {
-		this._hz = qb(y2hz(this.y()))
-		this.y(hz2y(this._hz))
+		const x = this.x()
+		const scaleEnable = $('#config-scale-enable')
+		const tones = (scaleEnable?.checked && window._scaleTonesAt) ? window._scaleTonesAt(x) : []
+		if (tones.length && window._snapToScale) {
+			this.y(window._snapToScale(this.y(), x))
+			this._hz = y2hz(this.y())
+		} else {
+			const st = window._getStaffState ? window._getStaffState(x) : null
+			this._hz = qb(y2hz(this.y()), st?.tonic, st?.edo)
+			this.y(hz2y(this._hz))
+		}
 		for (const n of this.childNotes.children) n.quantize()
 		this.updateColor()
 	}
@@ -570,11 +583,15 @@ export class RootNote extends Note {
 		this._part?.dispose()
 		this._part = new Tone.Part((time, note) => {
 			if (!sampler.loaded) return
+			// 应用谱表符号力度标记（持续到下一标记）
+			let vol = note.vol
+			const st = window._getStaffState ? window._getStaffState(note.absX) : null
+			if (st && st.velocity != null) vol = note.vol * st.velocity
 			sampler.triggerAttackRelease(
 				note.hz,
 				note.len,
 				time,
-				note.vol
+				vol
 			)
 		}, this.notes).start(this.noteHead + "i")
 		this._part.humanize = ($('#config-humanize').value || 0) / 1000

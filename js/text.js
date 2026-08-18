@@ -8,7 +8,7 @@
  */
 
 import { stage } from './sequencer.js'
-import { $, y2hz } from './util.js'
+import { $, y2hz, qh } from './util.js'
 import history from './history.js'
 
 // 文字锚点图层（用于 Konva 拖动/命中检测） // テキストアンカーレイヤー（Konvaドラッグ/当たり判定用）
@@ -187,6 +187,10 @@ export class TextNote {
 			}
 		})
 		this.konva.on('dragmove', e => {
+			// 谱表符号（指令文字）拖拽时按拍号吸附，不能乱移动
+			if (this._staffDirective && !TextSel._groupRef) {
+				this.konva.x(qh(this.konva.x()))
+			}
 			if (TextSel._groupRef) {
 				TextSel._syncGroupMove(this, this.konva.x(), this.konva.y())
 			}
@@ -199,6 +203,7 @@ export class TextNote {
 			if (TextSel._groupRef) TextSel._endGroupDrag()
 			if (window._sel?._groupRef) window._sel._endGroupDrag()
 			this.syncHtmlPosition()
+			window._parseStaff?.()
 		})
 	}
 
@@ -303,6 +308,7 @@ export const TextSel = {
 		this.select(t)
 		this.openEditor(t)
 		textlayer.draw()
+		window._parseStaff?.()
 		return t
 	},
 
@@ -366,6 +372,7 @@ export const TextSel = {
 			t.highlight(true)
 		}
 		textlayer.draw()
+		window._parseStaff?.()
 	},
 
 	// 剪切 // 切り取り // Cut
@@ -384,6 +391,7 @@ export const TextSel = {
 		}
 		this.selected.clear()
 		textlayer.draw()
+		window._parseStaff?.()
 	},
 
 	// 删除所有文字（清屏用，不单独记录历史） // すべてのテキストを削除（クリア用、履歴は記録しない）
@@ -430,6 +438,7 @@ export const TextSel = {
 		history.snapshot()
 		t.applyStyle(htmlText, text, fill, fontSize, fontFamily)
 		this.closeEditor()
+		window._parseStaff?.()
 	},
 
 	// 删除正在编辑的文字 // 編集中のテキストを削除 // Delete the text being edited
@@ -442,6 +451,7 @@ export const TextSel = {
 		t.destroy()
 		textlayer.draw()
 		this.closeEditor()
+		window._parseStaff?.()
 	},
 
 	// 组拖动开始：记录所有选中文字的初始位置 // グループドラッグ開始：全選択テキストの初期位置を記録

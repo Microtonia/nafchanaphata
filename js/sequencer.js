@@ -8,7 +8,7 @@ import {makePincher} from './pincher.js'
 import {Grid} from './grid.js'
 import {RootNote} from './note.js'
 import history from './history.js'
-import { x2t, qh, OFFSET } from './util.js'
+import { x2t, y2hz, hz2y, qb, qh, OFFSET } from './util.js'
 
 // Konva 舞台设置：全屏可拖拽画布
 // Konvaステージ設定：全画面ドラッグ可能キャンバス
@@ -67,7 +67,21 @@ stage.on('pointerclick', e => {
 	const fixLenEl = document.getElementById('config-fixed-note-len')
 	const len = (fixLenEl?.checked && tick >= 1) ? 48 / tick : 48
 	// 点击时用量化位置创建音符，之后音符不再受分辨率影响
-	const root = new RootNote(stage, qh(pos.x), pos.y, len)
+	// 调式启用时：吸附到该位置对应调式段的调式内音（含八度转位），并跳过 EDO 量化保留精确音高
+	let noteY = pos.y
+	let noteHz = null
+	const scaleEnable = document.getElementById('config-scale-enable')
+	const tones = (scaleEnable?.checked && window._scaleTonesAt) ? window._scaleTonesAt(pos.x) : []
+	if (tones.length && window._snapToScale) {
+		noteY = window._snapToScale(pos.y, pos.x)
+		noteHz = y2hz(noteY)
+	} else if (window._getStaffState) {
+		// 按谱表符号分段 tonic/edo 量化
+		const st = window._getStaffState(pos.x)
+		noteHz = qb(y2hz(pos.y), st.tonic, st.edo)
+		noteY = hz2y(noteHz)
+	}
+	const root = new RootNote(stage, qh(pos.x), noteY, len, noteHz)
 	rootlayer.add(root)
 	stage.current = root
 	root.playThis()

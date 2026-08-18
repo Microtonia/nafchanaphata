@@ -46,6 +46,11 @@ const tr = {
 		"tail": "末尾",
 		"resolution": "　分解能",
 		"edo-lines": "EDO 譜線",
+		"scale-enable": "調式有効",
+		"fifth-extend": "五度拡張",
+		"scale-color": "調式着色",
+		"scale-lines": "調式譜線",
+		"staff-symbols": "譜表記号",
 		"subdivide-lines": "分割譜線",
 		"fixed-note-len": "音価固定",
 		"beat": "拍",
@@ -211,7 +216,21 @@ const tr = {
 <p>テキスト断片を選択後、フォント/サイズ/カラーの各コントロールでその断片のスタイルを変更（リッチテキスト対応）</p>
 <p><kbd>Shift</kbd> + クリック / ドラッグ — テキスト複数選択（音符と共通の範囲選択）</p>
 <p>音符とテキストを同時選択時、ドラッグ・コピー・貼り付け・切り取り・削除を一括操作</p>
-<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — 音符とテキストを全選択</p>`
+<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — 音符とテキストを全選択</p>
+<h4>調式（Scale）</h4>
+<p>Config → 調式有効 をチェック — 調式制限を有効化</p>
+<p>1つ以上の和音を選択 → <kbd>D</kbd> キー — それらの和音の全音（中継音の破線を除く）を調式内音に設定</p>
+<p>差が 1 cent 以内の音は同じ音とみなす</p>
+<p>設定後、グリッドをクリックして音符を作成すると、調式内音とそのオクターブ転回のみ入力できる</p>
+<p>調式譜線 — 調式内音を半透明の横線で表示（各オクターブで繰り返し）</p>
+<p>調式着色 — 譜線の色に対応する音の次元線の色を使用</p>
+<p>五度拡張 — プレースホルダー（未実装）</p>
+<h4>譜表記号（テキスト指令）</h4>
+<p>文字編集ポップアップの「譜表記号」枠のボタンを押すと、文字欄に指令の接頭辞（Times フォント）が挿入され、続けて数字を入力できます</p>
+<p>区間指令：<kbd>EDO=24</kbd>（EDO 変更、全体を上書き可）、<kbd>BEAT=500</kbd>（拍長 ms）、<kbd>BPM=120</kbd>（毎分拍数）、<kbd>TONIC=440</kbd>（基音 Hz）、<kbd>SCALE</kbd>（その位置で調式クリア）</p>
+<p>反復：<kbd>||:</kbd> 反復開始、<kbd>:||</kbd> 反復終了（既定で計 2 回）、<kbd>:||=N</kbd> 計 N 回；前に <kbd>||:</kbd> が無い場合は先頭から反復</p>
+<p>強弱：<kbd>PPP PP P MP MF F FF FFF</kbd> — 以降の音符音量に影響（次の強弱記号まで）</p>
+<p>指令文字の左に縦線を表示；ドラッグ時は拍子にスナップ；譜表記号と調式譜線は工程（.naf）に保存されます</p>`
 	},
 	'en': {
 		"prog": "[Progress]",
@@ -229,6 +248,11 @@ const tr = {
 		"tail": "Tail",
 		"resolution": "　Resolution",
 		"edo-lines": "EDO Lines",
+		"scale-enable": "Scale Enable",
+		"fifth-extend": "Fifth Extend",
+		"scale-color": "Scale Color",
+		"scale-lines": "Scale Lines",
+		"staff-symbols": "Staff Symbols",
 		"subdivide-lines": "Subdivide Lines",
 		"fixed-note-len": "Fixed Note Len.",
 		"beat": "beat",
@@ -394,7 +418,21 @@ const tr = {
 <p>Select a text fragment, then use font/size/color controls to restyle it (rich text)</p>
 <p><kbd>Shift</kbd> + click / drag — multi-select text (shared with note marquee)</p>
 <p>When notes and text are selected together, drag/copy/paste/cut/delete act on both</p>
-<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — select all notes and text</p>`
+<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — select all notes and text</p>
+<h4>Scale</h4>
+<p>Check Config → Scale Enable — enable scale restriction</p>
+<p>Select one or more chords → press <kbd>D</kbd> — set all notes of these chords (excluding relay dashes) as scale tones</p>
+<p>Notes within 1 cent are treated as the same pitch</p>
+<p>After setting, clicking the grid only creates scale tones and their octave transpositions</p>
+<p>Scale Lines — translucent horizontal lines for scale tones (repeated per octave)</p>
+<p>Scale Color — line color uses the corresponding note's dimension line color</p>
+<p>Fifth Extend — placeholder (not implemented)</p>
+<h4>Staff Symbols (Text Directives)</h4>
+<p>Click a button in the "Staff Symbols" box of the text editor to insert a directive prefix (Times font), then type a number</p>
+<p>Section directives: <kbd>EDO=24</kbd> (change EDO, can override global), <kbd>BEAT=500</kbd> (beat length ms), <kbd>BPM=120</kbd> (beats per minute), <kbd>TONIC=440</kbd> (tonic Hz), <kbd>SCALE</kbd> (clear scale at that point)</p>
+<p>Repeats: <kbd>||:</kbd> start repeat, <kbd>:||</kbd> end repeat (2 times total by default), <kbd>:||=N</kbd> N times total; without a preceding <kbd>||:</kbd> it repeats from the beginning</p>
+<p>Dynamics: <kbd>PPP PP P MP MF F FF FFF</kbd> — affect subsequent note volume until the next dynamic mark</p>
+<p>A vertical line appears left of the directive text; dragging snaps to the beat; staff symbols and scale lines are saved in the project (.naf)</p>`
 	},
 	'zh': {
 		"prog": "［进行］",
@@ -412,6 +450,11 @@ const tr = {
 		"tail": "末尾",
 		"resolution": "　分辨率",
 		"edo-lines": "EDO 谱线",
+		"scale-enable": "调式启用",
+		"fifth-extend": "五度扩展",
+		"scale-color": "调式染色",
+		"scale-lines": "调式谱线",
+		"staff-symbols": "谱表符号",
 		"subdivide-lines": "分割谱线",
 		"fixed-note-len": "时值相同",
 		"beat": "拍",
@@ -577,7 +620,21 @@ const tr = {
 <p>选中文字片段后，用字体/大小/颜色控件修改该片段样式（支持富文本）</p>
 <p><kbd>Shift</kbd> + 点击 / 拖拽 — 多选文字（与音符共用框选）</p>
 <p>同时选中音符和文字时，拖动、复制、粘贴、剪切、删除会一起操作</p>
-<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — 全选音符和文字</p>`
+<p><kbd>Ctrl</kbd> + <kbd>A</kbd> — 全选音符和文字</p>
+<h4>调式（Scale）</h4>
+<p>勾选 Config → 调式启用 — 开启调式限制</p>
+<p>选中一个或多个和弦 → 按 <kbd>D</kbd> — 将这些和弦的所有音（不含中继音虚线）设为调式内音</p>
+<p>相差 ≤ 1 cent 的音视为同一个音</p>
+<p>设定后点击网格创建音符，只能输入调式内音及其八度转位</p>
+<p>调式谱线 — 半透明横线显示调式内音（每个八度重复）</p>
+<p>调式染色 — 谱线颜色使用对应音的维度线颜色</p>
+<p>五度扩展 — 占位符（暂未实现）</p>
+<h4>谱表符号（文字指令）</h4>
+<p>在文字编辑弹窗的「谱表符号」框点击按钮，会在文字栏插入指令前缀（Times 字体），随后输入数字即可</p>
+<p>分段指令：<kbd>EDO=24</kbd>（改变 EDO，可超越全局）、<kbd>BEAT=500</kbd>（拍长 ms）、<kbd>BPM=120</kbd>（每分钟拍数）、<kbd>TONIC=440</kbd>（基音 Hz）、<kbd>SCALE</kbd>（该处调式清零）</p>
+<p>循环节：<kbd>||:</kbd> 循环开始、<kbd>:||</kbd> 循环结束（默认共 2 次）、<kbd>:||=N</kbd> 共 N 次；前面没有 <kbd>||:</kbd> 时从开头循环</p>
+<p>力度：<kbd>PPP PP P MP MF F FF FFF</kbd> — 影响其后音符音量，直到下一个力度标记</p>
+<p>指令文字左侧显示竖线；拖拽时按拍号吸附；谱表符号与调式谱线均随工程（.naf）保存</p>`
 	},
 	'sf': {
 		"prog": "[Clyftach]",
@@ -595,6 +652,11 @@ const tr = {
 		"tail": "Tainam",
 		"resolution": "Recutalsyxa",
 		"edo-lines": "EDO Lynyc",
+		"scale-enable": "[Scaly]",
+		"fifth-extend": "[Fiftch]",
+		"scale-color": "[Scaly Kaly]",
+		"scale-lines": "[Scaly Linyc]",
+		"staff-symbols": "[Styff Cymbal]",
 		"subdivide-lines": "Xub Taccle",
 		"fixed-note-len": "Fyxac Lyn.",
 		"beat": "pyt'",

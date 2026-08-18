@@ -21,6 +21,11 @@ export class Serializer {
 	// シリアライズメインエントリ：現在のプロジェクトをJSON文字列にシリアライズ（オプションでcrush圧縮）
 	// Main serialize entry: serializes current project to JSON string (optional crush compression)
 	static serialize(savegrid, crush = true) {
+		// 序列化调式段（含各段调式内音），保证撤销/加载后调式谱线不丢失
+		const sc = (window._scale?.segments || []).map(seg => ({
+			x: seg.startX === -Infinity ? null : Math.round(seg.startX * 4),
+			t: (seg.tones || []).map(t => ({ h: Math.round(t.hz * HZ_MUL), c: t.color }))
+		})).filter(seg => seg.t.length > 0)
 		const s = savegrid ? {
 			v: 2,
 			b: grid.beat,
@@ -28,10 +33,11 @@ export class Serializer {
 			s: x2t(grid.loopStart.x()),
 			e: x2t(grid.loopEnd.x()),
 			i: $('#config-tone').value,
-			o: rootlayer.opacity()
-		} : { v: 2, o: rootlayer.opacity() }   // 历史快照也带版本标记，避免反序列化时 hzDiv 回退到 16 / 履歴スナップショットにもバージョンタグを付与、デシリアライズ時のhzDiv後退を防止 / History snapshots also carry version tag to prevent hzDiv fallback to 16
+			o: rootlayer.opacity(),
+			sc: sc
+		} : { v: 2, o: rootlayer.opacity(), sc: sc }   // 历史快照也带版本标记，避免反序列化时 hzDiv 回退到 16 / 履歴スナップショットにもバージョンタグを付与、デシリアライズ時のhzDiv後退を防止 / History snapshots also carry version tag to prevent hzDiv fallback to 16
 		const n = rootlayer.children.map(x => this.root2json(x))
-		// 序列化文字注释（通过 window 访问，避免循环依赖）
+		// 序列化文字注释（通过 window 访问，避免循环依赖）；谱表符号即文字指令，一并存入 x
 		const texts = window._textSel ? [...window._textSel.all].map(t => t.toJSON()) : []
 		const json = JSON.stringify(
 			{s: s, n: n, x: texts}, 
@@ -123,6 +129,19 @@ export class Serializer {
 				}
 			}
 			window._textlayer.draw()
+		}
+		// 重新解析谱表符号（文字指令）
+		window._parseStaff?.()
+		// 恢复调式段（含各段调式内音），覆盖 parseStaff 按 SCALE 指令重建的空段
+		if (u.s && u.s.sc) {
+			const segs = u.s.sc.map(seg => ({
+				startX: seg.x == null ? -Infinity : seg.x / 4,
+				tones: (seg.t || []).map(t => ({ hz: t.h / HZ_MUL, color: t.c }))
+			}))
+			if (!segs.some(s => s.startX === -Infinity)) segs.unshift({ startX: -Infinity, tones: [] })
+			window._scale.segments = segs
+			window._scale.tones = segs[segs.length - 1]?.tones || []
+			grid.drawScaleLines()
 		}
 		if (!u.n) return
 		for (const n of u.n) {
