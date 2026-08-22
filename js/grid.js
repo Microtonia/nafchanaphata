@@ -31,6 +31,7 @@ export class Grid extends Konva.Layer {
 		this.beatlines = new Konva.Group()
 		this.edolines = new Konva.Group()
 		this.scalelines = new Konva.Group()
+		this.fifthlines = new Konva.Group()
 		this.tonicline = new Konva.Group()
 		
 		this.indicator = new Konva.Line({
@@ -107,7 +108,7 @@ export class Grid extends Konva.Layer {
 		})
 		this.setLoop()
 		
-		this.add(this.edolines, this.scalelines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
+		this.add(this.edolines, this.fifthlines, this.scalelines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
 		// 非交互元素禁用 hit 检测，减少大量网格线的碰撞计算 / 非インタラクティブ要素のヒット検出を無効化し、大量のグリッド線の衝突計算を削減 / Disable hit detection on non-interactive elements to reduce collision checks
 		this.scorelines.listening(false)
 		this.scorelines2.listening(false)
@@ -116,6 +117,7 @@ export class Grid extends Konva.Layer {
 		this.beatlines.listening(false)
 		this.edolines.listening(false)
 		this.scalelines.listening(false)
+		this.fifthlines.listening(false)
 		this.tonicline.listening(false)
 		this.indicator.listening(false)
 		this.drawScorelines()
@@ -276,7 +278,12 @@ export class Grid extends Konva.Layer {
 		if (!$('#config-scale-lines')?.checked) return
 		const colorLines = $('#config-scale-color')?.checked
 		const segments = window._scale?.segments || [{ startX: -1e7, tones: window._scale?.tones || [] }]
-		const lineCount = Math.ceil(window.innerHeight / this.stage.scaleY() / 100) + 2
+		// 以视口中心为基准、上下各铺约一屏（内容坐标），避免平移/缩放后下半部分谱线消失
+		const sy = this.stage.scaleY() || 1
+		const viewH = window.innerHeight / sy
+		const centerY = (window.innerHeight / 2 - this.stage.y()) / sy
+		const kMin = Math.floor((centerY - viewH) / 100) - 2
+		const kMax = Math.ceil((centerY + viewH) / 100) + 2
 		for (let i = 0; i < segments.length; i++) {
 			const seg = segments[i]
 			const s = (seg.startX === -Infinity) ? -1e7 : seg.startX
@@ -286,7 +293,7 @@ export class Grid extends Konva.Layer {
 			if (!tones.length) continue
 			for (const t of tones) {
 				const yMod = ((hz2y(t.hz) % 100) + 100) % 100
-				for (let k = -1; k < lineCount; k++) {
+				for (let k = kMin; k <= kMax; k++) {
 					this.scalelines.add(new Konva.Line({
 						points: [s, yMod + 100 * k, e, yMod + 100 * k],
 						strokeWidth: 0.8,
@@ -297,7 +304,47 @@ export class Grid extends Konva.Layer {
 			}
 		}
 	}
-	
+
+	// 绘制五度扩展谱线：选中和弦的根音按 2d（五度）上下堆叠，再叠加 xd 音程谱线
+	drawFifthLines() {
+		this.fifthlines.destroyChildren()
+		if (!$('#config-fifth-extend')?.checked) return
+		const colorLines = $('#config-scale-color')?.checked
+		const segments = window._fifth?.segments || []
+		const interval = this._2dInterval   // 五度（3/2）间距
+		const sy = this.stage.scaleY() || 1
+		const viewH = window.innerHeight / sy
+		const centerY = (window.innerHeight / 2 - this.stage.y()) / sy
+		const topY = centerY - viewH - 200
+		const bottomY = centerY + viewH + 200
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i]
+			if (seg.rootHz == null) continue
+			const s = seg.startX === -Infinity ? -1e7 : seg.startX
+			const e = (segments[i + 1] ? (segments[i + 1].startX === -Infinity ? -1e7 : segments[i + 1].startX) : 1e7)
+			if (s >= e) continue
+			const rootY = hz2y(seg.rootHz)
+			if (rootY == null) continue
+			const bases = [{ y: rootY, color: colorLines ? '#f27992' : '#ffffff' }]
+			if (seg.xdHz != null) {
+				const xdY = hz2y(seg.xdHz)
+				if (xdY != null) bases.push({ y: xdY, color: colorLines ? (seg.xdColor || '#ffffff') : '#ffffff' })
+			}
+			for (const b of bases) {
+				const kMin = Math.floor((topY - b.y) / interval) - 1
+				const kMax = Math.ceil((bottomY - b.y) / interval) + 1
+				for (let k = kMin; k <= kMax; k++) {
+					this.fifthlines.add(new Konva.Line({
+						points: [s, b.y + interval * k, e, b.y + interval * k],
+						strokeWidth: 0.8,
+						stroke: b.color,
+						opacity: 0.35
+					}))
+				}
+			}
+		}
+	}
+
 	// 绘制节拍竖线 / ビート縦線を描画 / Draw beat vertical lines
 	drawBeatlines() {
 		this.beatlines.destroyChildren()
@@ -318,25 +365,37 @@ export class Grid extends Konva.Layer {
 		Tone.Transport.bpm.value = 60000 / ($('#config-beat').value || 500)
 	}
 
-	// 细分谱线：在拍之间插入更细更透明的竖线 / 分割線：拍の間に細く透明な縦線を挿入 / Subdivision lines: insert thinner, more transparent lines between beats
+	// 细分谱线：在拍之间插入更细更透明的竖线（按拍号 BEAT=1/N 符号分段）
 	drawSubdivisionLines() {
 		try {
 		const subEl = document.getElementById('config-subdivide-lines')
 		if (!subEl?.checked) return
 		const tickEl = document.getElementById('config-tick')
-		const tick = tickEl ? (parseInt(tickEl.value) || 1) : 1
-		if (tick <= 1) return  // 分辨率 >= 1 拍时不加
-		const count = Math.ceil(window.innerWidth / this.stage.scaleX() / 48) + 1
-		for (let i = 0; i < count; i++) {
-			for (let j = 1; j < tick; j++) {
-				this.beatlines.add(new Konva.Line({
-					x: 48 * i + (48 / tick) * j,
-					y: 0,
-					points: [0, 0, 0, window.innerHeight / this.stage.scaleY()],
-					strokeWidth: 0.5,
-					stroke: '#7e7d93',
-					opacity: 0.35
-				}))
+		const globalTick = tickEl ? (parseInt(tickEl.value) || 1) : 1
+		const sections = this._getSections('timesig', globalTick)
+		const left = Math.floor(-this.stage.x() / this.stage.scaleX() / 48) * 48
+		const right = left + window.innerWidth / this.stage.scaleX()
+		for (const sec of sections) {
+			const tick = sec.value >= 2 ? sec.value : 1
+			if (tick <= 1) continue
+			const s = Math.max(sec.startX, left)
+			const e = Math.min(sec.endX, right)
+			if (s >= e) continue
+			const startBeat = Math.floor(s / 48)
+			const endBeat = Math.ceil(e / 48)
+			for (let i = startBeat; i <= endBeat; i++) {
+				for (let j = 1; j < tick; j++) {
+					const absX = 48 * i + (48 / tick) * j
+					if (absX < s || absX >= e) continue
+					this.beatlines.add(new Konva.Line({
+						x: absX - left,
+						y: 0,
+						points: [0, 0, 0, window.innerHeight / this.stage.scaleY()],
+						strokeWidth: 0.5,
+						stroke: '#7e7d93',
+						opacity: 0.35
+					}))
+				}
 			}
 		}
 		} catch(err) { console.error('drawSubdivisionLines error:', err) }
@@ -356,6 +415,8 @@ export class Grid extends Konva.Layer {
 		this.edolines.y(0)
 		this.scalelines.x(0)
 		this.scalelines.y(0)
+		this.fifthlines.x(0)
+		this.fifthlines.y(0)
 		this.tonicline.x(0)
 		this.tonicline.y(0)
 

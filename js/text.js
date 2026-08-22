@@ -187,9 +187,10 @@ export class TextNote {
 			}
 		})
 		this.konva.on('dragmove', e => {
-			// 谱表符号（指令文字）拖拽时按拍号吸附，不能乱移动
+			// 谱表符号（指令文字）拖拽时按拍号吸附；拍号（BEAT=1/N）符号固定按 1/1 吸附，避免错位
 			if (this._staffDirective && !TextSel._groupRef) {
-				this.konva.x(qh(this.konva.x()))
+				const tick = this._staffDirective.type === 'timesig' ? 1 : undefined
+				this.konva.x(qh(this.konva.x(), tick))
 			}
 			if (TextSel._groupRef) {
 				TextSel._syncGroupMove(this, this.konva.x(), this.konva.y())

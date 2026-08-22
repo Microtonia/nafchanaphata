@@ -64,8 +64,10 @@ stage.on('pointerclick', e => {
 	history.snapshot()
 	const tickEl = document.getElementById('config-tick')
 	const tick = tickEl ? (parseInt(tickEl.value) || 1) : 1
+	const st = window._getStaffState ? window._getStaffState(pos.x) : null
+	const effTick = st?.tick || tick
 	const fixLenEl = document.getElementById('config-fixed-note-len')
-	const len = (fixLenEl?.checked && tick >= 1) ? 48 / tick : 48
+	const len = (fixLenEl?.checked && effTick >= 1) ? 48 / effTick : 48
 	// 点击时用量化位置创建音符，之后音符不再受分辨率影响
 	// 调式启用时：吸附到该位置对应调式段的调式内音（含八度转位），并跳过 EDO 量化保留精确音高
 	let noteY = pos.y
@@ -75,13 +77,12 @@ stage.on('pointerclick', e => {
 	if (tones.length && window._snapToScale) {
 		noteY = window._snapToScale(pos.y, pos.x)
 		noteHz = y2hz(noteY)
-	} else if (window._getStaffState) {
+	} else if (st) {
 		// 按谱表符号分段 tonic/edo 量化
-		const st = window._getStaffState(pos.x)
 		noteHz = qb(y2hz(pos.y), st.tonic, st.edo)
 		noteY = hz2y(noteHz)
 	}
-	const root = new RootNote(stage, qh(pos.x), noteY, len, noteHz)
+	const root = new RootNote(stage, qh(pos.x, st?.tick), noteY, len, noteHz)
 	rootlayer.add(root)
 	stage.current = root
 	root.playThis()
@@ -105,6 +106,8 @@ stage.on('dragmove', e => grid.adjust())
 stage.on('pinchmove', e => {
 //	console.log('pinching')
 	grid.drawScorelines()
+	grid.drawScaleLines()
+	grid.drawFifthLines()
 	grid.drawBeatlines()
 	grid.fixArrowScale()
 	grid.adjust()

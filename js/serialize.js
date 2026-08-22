@@ -21,11 +21,11 @@ export class Serializer {
 	// シリアライズメインエントリ：現在のプロジェクトをJSON文字列にシリアライズ（オプションでcrush圧縮）
 	// Main serialize entry: serializes current project to JSON string (optional crush compression)
 	static serialize(savegrid, crush = true) {
-		// 序列化调式段（含各段调式内音），保证撤销/加载后调式谱线不丢失
-		const sc = (window._scale?.segments || []).map(seg => ({
+		// 序列化调式段（仅保存/加载 .naf 时保存；历史快照不保存，避免撤销误回滚调式）
+		const sc = savegrid ? (window._scale?.segments || []).map(seg => ({
 			x: seg.startX === -Infinity ? null : Math.round(seg.startX * 4),
 			t: (seg.tones || []).map(t => ({ h: Math.round(t.hz * HZ_MUL), c: t.color }))
-		})).filter(seg => seg.t.length > 0)
+		})).filter(seg => seg.t.length > 0) : undefined
 		const s = savegrid ? {
 			v: 2,
 			b: grid.beat,
@@ -35,7 +35,7 @@ export class Serializer {
 			i: $('#config-tone').value,
 			o: rootlayer.opacity(),
 			sc: sc
-		} : { v: 2, o: rootlayer.opacity(), sc: sc }   // 历史快照也带版本标记，避免反序列化时 hzDiv 回退到 16 / 履歴スナップショットにもバージョンタグを付与、デシリアライズ時のhzDiv後退を防止 / History snapshots also carry version tag to prevent hzDiv fallback to 16
+		} : { v: 2, o: rootlayer.opacity() }   // 历史快照也带版本标记，避免反序列化时 hzDiv 回退到 16 / 履歴スナップショットにもバージョンタグを付与、デシリアライズ時のhzDiv後退を防止 / History snapshots also carry version tag to prevent hzDiv fallback to 16
 		const n = rootlayer.children.map(x => this.root2json(x))
 		// 序列化文字注释（通过 window 访问，避免循环依赖）；谱表符号即文字指令，一并存入 x
 		const texts = window._textSel ? [...window._textSel.all].map(t => t.toJSON()) : []

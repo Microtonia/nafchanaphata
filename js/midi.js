@@ -78,6 +78,9 @@ function collectAllNotes(rootlayer) {
 		flattenNotes(root, rootStart, result)
 	}
 	result.sort((a, b) => a.absStart - b.absStart)
+	// 循环节展开（||: / :|| / :||=N），MIDI 与 WAV 导出统一考虑
+	const loops = collectLoops()
+	if (loops.length) return expandNotesForWav(result, loops)
 	return result
 }
 // 递归展平音符树（跳过静音音符）// 音符ツリーを再帰的にフラット化（ミュート音符をスキップ）// Recursively flatten note tree (skip muted notes)
@@ -87,6 +90,51 @@ function flattenNotes(note, absTime, out) {
 		out.push({ hz: nd.hz, absStart: absTime + (nd._time || 0), duration: nd._len || 0, vol: nd.vol || 0.5 })
 	}
 	for (const child of note.childNotes.getChildren()) flattenNotes(child, absTime, out)
+}
+
+// 收集循环节（||: / :|| / :||=N），返回 [{startTick, endTick, times}]
+// 收集反復記号（||: / :|| / :||=N）、[{startTick, endTick, times}] を返す
+function collectLoops() {
+	const stack = []
+	const loops = []
+	const dirs = (window._staffDirectives || []).filter(d => d.type === 'loopstart' || d.type === 'loopend')
+	for (const d of dirs) {
+		if (d.type === 'loopstart') {
+			stack.push(d.x)
+		} else {
+			const startX = stack.length ? stack.pop() : 0  // 无 ||: 时从开头循环
+			loops.push({ startTick: x2t(startX), endTick: x2t(d.x), times: d.times || 1 })
+		}
+	}
+	loops.sort((a, b) => a.startTick - b.startTick)
+	return loops
+}
+
+// 展开音符（含循环反复）：段内音符按反复次数复制，段后音符顺延
+// 音符を展開（反復含む）：セクション内の音符を反復回数分コピー、後続は繰り下げ
+function expandNotesForWav(allNotes, loops) {
+	const result = []
+	for (const n of allNotes) {
+		const t = n.absStart
+		let inLoop = null
+		for (const l of loops) {
+			if (t >= l.startTick && t < l.endTick) { inLoop = l; break }
+		}
+		let offset = 0
+		for (const l of loops) {
+			if (l.endTick <= t) offset += (l.endTick - l.startTick) * l.times
+		}
+		if (!inLoop) {
+			result.push({ hz: n.hz, absStart: t + offset, duration: n.duration, vol: n.vol })
+		} else {
+			const L = inLoop.endTick - inLoop.startTick
+			for (let k = 0; k <= inLoop.times; k++) {
+				result.push({ hz: n.hz, absStart: t + offset + L * k, duration: n.duration, vol: n.vol })
+			}
+		}
+	}
+	result.sort((a, b) => a.absStart - b.absStart)
+	return result
 }
 
 // ========== MIDI Header / Track ==========

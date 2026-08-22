@@ -127,6 +127,8 @@ $('#config-edo').addEventListener('change', function(e) {
 // === 調式システム：選択した和音の音を調式内音とする ===
 // === Scale system: notes of selected chords become scale tones ===
 window._scale = { segments: [{ startX: -Infinity, tones: [] }], tones: [] }
+// 五度扩展：选中和弦的根音(0d) + 非 2d 直接子音(xd) 作为五度堆叠基准（按 scale 符号分段）
+window._fifth = { segments: [{ startX: -Infinity, rootHz: null, xdHz: null, xdColor: null }] }
 
 // 获取 x 位置对应的调式段对象 // x位置に対応する調式セグメントを取得
 function scaleSegmentAt(x) {
@@ -197,6 +199,48 @@ window._collectScale = collectScale
 window._snapToScale = snapToScale
 window._scaleTonesAt = scaleTonesAt
 
+// 获取 x 位置对应的五度扩展段对象 // x位置に対応する五度拡張セグメントを取得
+function fifthSegmentAt(x) {
+	const segs = window._fifth.segments
+	let cur = segs[0]
+	for (const seg of segs) { if (seg.startX <= x) cur = seg }
+	return cur
+}
+
+// 收集五度扩展：选中和弦的根音(0d) + 非 2d 直接子音(xd) 作为五度堆叠基准
+function collectFifth() {
+	const roots = new Set()
+	let segX = null
+	let rootHz = null
+	let xdHz = null
+	let xdColor = null
+	for (const n of window._sel?.selected || []) {
+		const root = n.root
+		if (!root || root.type !== 'root' || roots.has(root)) continue
+		roots.add(root)
+		if (segX == null) segX = root.x()
+		const f0 = root._hz || root.hz
+		if (f0) rootHz = f0
+		// 找直接子音中的 xd（排除 2d 五度 3/2 与虚线音符）
+		for (const child of root.childNotes.getChildren()) {
+			const iv = child.interval
+			if (!iv) continue
+			// 排除虚线音符（中继音 [8,6]、静音 [10,7] 等所有 dash 非空）
+			const dash = child.pitchline && child.pitchline.dash()
+			if (Array.isArray(dash) && dash.length > 0) continue
+			if (Math.abs(iv.n / iv.d - 3 / 2) < 1e-9) continue  // 2d 五度
+			if (xdHz == null) { xdHz = child.hz; xdColor = iv.c }
+		}
+	}
+	const seg = segX != null ? fifthSegmentAt(segX) : window._fifth.segments[window._fifth.segments.length - 1]
+	seg.rootHz = rootHz
+	seg.xdHz = xdHz
+	seg.xdColor = xdColor
+	grid.drawFifthLines()
+	return seg
+}
+window._collectFifth = collectFifth
+
 // 根据 ChangeScale 指令重建调式段（符号后调式清零，符号前不受影响）
 function refreshScaleSegments() {
 	const bounds = [-Infinity]
@@ -219,12 +263,36 @@ function refreshScaleSegments() {
 }
 window._refreshScaleSegments = refreshScaleSegments
 
+// 根据 ChangeScale 指令重建五度扩展段（与调式段同样按 scale 符号分段）
+function refreshFifthSegments() {
+	const bounds = [-Infinity]
+	for (const d of (window._staffDirectives || [])) {
+		if (d.type === 'scale') bounds.push(d.x)
+	}
+	bounds.sort((a, b) => a - b)
+	const oldSegs = window._fifth.segments || []
+	const newSegs = []
+	for (const b of bounds) {
+		let seg = null
+		for (const os of oldSegs) {
+			if (os.startX === b || Math.abs(os.startX - b) < 1) { seg = os; break }
+		}
+		newSegs.push(seg || { startX: b, rootHz: null, xdHz: null, xdColor: null })
+	}
+	window._fifth.segments = newSegs
+	grid.drawFifthLines()
+}
+window._refreshFifthSegments = refreshFifthSegments
+
 // 谱表符号变化时刷新分段谱线
 window._staffChanged = function() {
 	refreshScaleSegments()
+	refreshFifthSegments()
 	grid.drawEdoLines()
 	grid.drawScorelines()
 	grid.drawScaleLines()
+	grid.drawFifthLines()
+	grid.drawBeatlines()
 }
 
 // D 键：设定调式内音（选中和弦的所有音作为调式内音）
@@ -236,7 +304,8 @@ document.addEventListener('keydown', e => {
 		const tag = el?.tagName
 		if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
 		e.preventDefault()
-		collectScale()
+		if ($('#config-fifth-extend')?.checked) collectFifth()
+		else collectScale()
 	}
 })
 
@@ -245,10 +314,18 @@ $('#config-scale-enable').addEventListener('change', function(e) {
 	// 仅启用/禁用调式限制；调式内音通过「选中和弦后按 D 键」设定
 })
 $('#config-scale-lines').addEventListener('change', function(e) {
+	// 与五度扩展互斥：勾选调式谱线时取消五度扩展
+	if (this.checked) { $('#config-fifth-extend').checked = false; grid.drawFifthLines() }
 	grid.drawScaleLines()
+})
+$('#config-fifth-extend').addEventListener('change', function(e) {
+	// 与调式谱线互斥：勾选五度扩展时取消调式谱线
+	if (this.checked) { $('#config-scale-lines').checked = false; grid.drawScaleLines() }
+	grid.drawFifthLines()
 })
 $('#config-scale-color').addEventListener('change', function(e) {
 	grid.drawScaleLines()
+	grid.drawFifthLines()
 })
 // 启用 6d/7d 维度 // 6d/7d 次元を有効化 // Enable 6d/7d dimensions
 $('#config-enable-6d').addEventListener('change', function(e) {
@@ -554,6 +631,7 @@ $('#play-pause-btn').addEventListener('click', e => {
 		_stopEventId = Tone.Transport.schedule((time) => {
 			Tone.Transport.stop()
 			window._stopLoopMonitor?.()
+			window._stopTempoMonitor?.()
 			Tone.Transport.seconds = Tone.Transport.loopStart
 			$('#play-pause-btn i').textContent = 'play_arrow'
 			grid.hideIndicator()
@@ -568,6 +646,7 @@ $('#play-pause-btn').addEventListener('click', e => {
 $('#skip-btn').addEventListener('click', e => {
 	Tone.Transport.stop()
 	window._stopLoopMonitor?.()
+	window._stopTempoMonitor?.()
 	Tone.Transport.clear(_stopEventId)
 	Tone.Transport.seconds = Tone.Transport.loopStart
 	$('#play-pause-btn i').textContent = 'play_arrow'
@@ -2023,6 +2102,8 @@ document.addEventListener('wheel', (e) => {
 		})
 	}
 	grid.drawScorelines()
+	grid.drawScaleLines()
+	grid.drawFifthLines()
 	grid.drawBeatlines()
 	grid.fixArrowScale()
 	grid.adjust()

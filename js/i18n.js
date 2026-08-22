@@ -224,9 +224,9 @@ const tr = {
 <p>設定後、グリッドをクリックして音符を作成すると、調式内音とそのオクターブ転回のみ入力できる</p>
 <p>調式譜線 — 調式内音を半透明の横線で表示（各オクターブで繰り返し）</p>
 <p>調式着色 — 譜線の色に対応する音の次元線の色を使用</p>
-<p>五度拡張 — プレースホルダー（未実装）</p>
+<p>五度拡張 — 「0d ルート + 2d 五度 + xd 音」を含む和音を選んで D を押すと、ルートを上下に五度(2d)で積み上げ、各音の xd 譜線を重ねる；調式譜線と排他</p>
 <h4>譜表記号（テキスト指令）</h4>
-<p>文字編集ポップアップの「譜表記号」枠のボタンを押すと、文字欄に指令の接頭辞（Times フォント）が挿入され、続けて数字を入力できます</p>
+<p>文字編集ポップアップの「譜表記号」枠のボタンを押すと、文字欄に指令の接頭辞（LapisiaA フォント）が挿入され、続けて数字を入力できます</p>
 <p>区間指令：<kbd>EDO=24</kbd>（EDO 変更、全体を上書き可）、<kbd>BEAT=500</kbd>（拍長 ms）、<kbd>BPM=120</kbd>（毎分拍数）、<kbd>TONIC=440</kbd>（基音 Hz）、<kbd>SCALE</kbd>（その位置で調式クリア）</p>
 <p>反復：<kbd>||:</kbd> 反復開始、<kbd>:||</kbd> 反復終了（既定で計 2 回）、<kbd>:||=N</kbd> 計 N 回；前に <kbd>||:</kbd> が無い場合は先頭から反復</p>
 <p>強弱：<kbd>PPP PP P MP MF F FF FFF</kbd> — 以降の音符音量に影響（次の強弱記号まで）</p>
@@ -428,7 +428,7 @@ const tr = {
 <p>Scale Color — line color uses the corresponding note's dimension line color</p>
 <p>Fifth Extend — placeholder (not implemented)</p>
 <h4>Staff Symbols (Text Directives)</h4>
-<p>Click a button in the "Staff Symbols" box of the text editor to insert a directive prefix (Times font), then type a number</p>
+<p>Click a button in the "Staff Symbols" box of the text editor to insert a directive prefix (LapisiaA font), then type a number</p>
 <p>Section directives: <kbd>EDO=24</kbd> (change EDO, can override global), <kbd>BEAT=500</kbd> (beat length ms), <kbd>BPM=120</kbd> (beats per minute), <kbd>TONIC=440</kbd> (tonic Hz), <kbd>SCALE</kbd> (clear scale at that point)</p>
 <p>Repeats: <kbd>||:</kbd> start repeat, <kbd>:||</kbd> end repeat (2 times total by default), <kbd>:||=N</kbd> N times total; without a preceding <kbd>||:</kbd> it repeats from the beginning</p>
 <p>Dynamics: <kbd>PPP PP P MP MF F FF FFF</kbd> — affect subsequent note volume until the next dynamic mark</p>
@@ -628,9 +628,9 @@ const tr = {
 <p>设定后点击网格创建音符，只能输入调式内音及其八度转位</p>
 <p>调式谱线 — 半透明横线显示调式内音（每个八度重复）</p>
 <p>调式染色 — 谱线颜色使用对应音的维度线颜色</p>
-<p>五度扩展 — 占位符（暂未实现）</p>
+<p>五度扩展 — 选中含「0d 根音 + 2d 五度 + xd 音」的和弦后按 D：以根音向上下堆叠五度(2d)谱线，再叠加每个音的 xd 谱线；与调式谱线互斥</p>
 <h4>谱表符号（文字指令）</h4>
-<p>在文字编辑弹窗的「谱表符号」框点击按钮，会在文字栏插入指令前缀（Times 字体），随后输入数字即可</p>
+<p>在文字编辑弹窗的「谱表符号」框点击按钮，会在文字栏插入指令前缀（LapisiaA 字体），随后输入数字即可</p>
 <p>分段指令：<kbd>EDO=24</kbd>（改变 EDO，可超越全局）、<kbd>BEAT=500</kbd>（拍长 ms）、<kbd>BPM=120</kbd>（每分钟拍数）、<kbd>TONIC=440</kbd>（基音 Hz）、<kbd>SCALE</kbd>（该处调式清零）</p>
 <p>循环节：<kbd>||:</kbd> 循环开始、<kbd>:||</kbd> 循环结束（默认共 2 次）、<kbd>:||=N</kbd> 共 N 次；前面没有 <kbd>||:</kbd> 时从开头循环</p>
 <p>力度：<kbd>PPP PP P MP MF F FF FFF</kbd> — 影响其后音符音量，直到下一个力度标记</p>
