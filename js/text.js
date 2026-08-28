@@ -530,19 +530,17 @@ $('#text-edit-content').addEventListener('keyup', saveEditorSelection)
 $('#text-edit-size').addEventListener('input', e => {
 	const size = parseInt(e.target.value) || 30
 	$('#text-edit-size-val').textContent = size
-	applyStyleToSelection('font-size: ' + size + 'px')
-	syncTextareaFont()
+	// 有选中文本：只应用到选中范围；无选中：更新文本框默认样式
+	if (!applyStyleToSelection('font-size: ' + size + 'px')) syncTextareaFont()
 })
 $('#text-edit-font').addEventListener('input', e => {
 	const idx = parseInt(e.target.value)
 	const family = FONTS[idx]?.family || 'Arial'
 	$('#text-edit-font-val').textContent = FONTS[idx]?.label || ''
-	applyStyleToSelection('font-family: "' + family + '", sans-serif')
-	syncTextareaFont()
+	if (!applyStyleToSelection('font-family: "' + family + '", sans-serif')) syncTextareaFont()
 })
 $('#text-edit-color').addEventListener('input', e => {
-	applyStyleToSelection('color: ' + e.target.value)
-	syncTextareaFont()
+	if (!applyStyleToSelection('color: ' + e.target.value)) syncTextareaFont()
 })
 $('#text-edit-ok-btn').addEventListener('click', () => TextSel.applyEditor())
 $('#text-edit-del-btn').addEventListener('click', () => TextSel.deleteEditing())
@@ -592,12 +590,16 @@ function saveEditorSelection() {
 	const sel = window.getSelection()
 	if (sel.rangeCount && !sel.getRangeAt(0).collapsed) {
 		_savedRange = sel.getRangeAt(0).cloneRange()
+	} else {
+		// 无选中（光标折叠）时清空缓存，避免把样式应用到旧范围
+		_savedRange = null
 	}
 }
 
-// 应用 CSS 样式到缓存的选中文本范围 // キャッシュ済み選択範囲に CSS スタイルを適用
+// 应用 CSS 样式到缓存的选中文本范围；返回是否真正应用（无选中返回 false）
+// キャッシュ済み選択範囲に CSS スタイルを適用；適用されたかどうかを返す
 function applyStyleToSelection(cssText) {
-	if (!_savedRange) return
+	if (!_savedRange) return false
 	const range = _savedRange
 	const span = document.createElement('span')
 	span.style.cssText = cssText
@@ -607,6 +609,11 @@ function applyStyleToSelection(cssText) {
 	const nr = document.createRange()
 	nr.selectNodeContents(span)
 	_savedRange = nr
+	// 恢复浏览器选区到该 span，保证后续连续操作与选区正确
+	const sel = window.getSelection()
+	sel.removeAllRanges()
+	sel.addRange(nr)
+	return true
 }
 
 // 构建符号选择网格 // 記号選択グリッドを構築 // Build symbol selection grid

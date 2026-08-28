@@ -63,7 +63,31 @@ function tones(tone) {
 				},
 				release: 1.25
 			})
+		// 正弦波合成音源（实时合成，无需采样）
+		case 'sine':
+			return makeSynth('sine')
+		// 方波合成音源（实时合成，无需采样）
+		case 'square':
+			return makeSynth('square')
+		// 锯齿波合成音源（实时合成，无需采样）
+		case 'sawtooth':
+			return makeSynth('sawtooth')
+		// 三角波合成音源（实时合成，无需采样）
+		case 'triangle':
+			return makeSynth('triangle')
 	}
+}
+
+// 创建合成音源：Tone.PolySynth 支持多音，附 loaded=true 以兼容采样器的就绪检查
+function makeSynth(type) {
+	const synth = new Tone.PolySynth(Tone.Synth, {
+		oscillator: { type },
+		envelope: { attack: 0.01, decay: 0.3, sustain: 0.4, release: 0.8 }
+	})
+	// 合成器满幅振荡，多音叠加易削波产生噪点，整体降音量
+	synth.volume.value = -10
+	synth.loaded = true
+	return synth
 }
 
 // 切换音色：先释放当前采样器，再创建新的并输出到主总线 // 音色切替：現在のサンプラーを解放し、新しいサンプラーを作成してメイン出力に接続 // Switch tone: dispose current sampler, create new one and route to main output
