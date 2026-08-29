@@ -102,7 +102,10 @@ $('#config-tick').addEventListener('change', function(e) {
 $('#config-tonic').addEventListener('change', function(e) {
 	grid.tonic = this.value
 })
-// 乐谱线（1d-4d）// スコアライン（1d-4d）// Score lines (1d-4d)
+// 乐谱线（0d-4d）// スコアライン（0d-4d）// Score lines (0d-4d)
+$('#config-scoreline-0d').addEventListener('change', function(e) {
+	grid.drawScorelines()
+})
 $('#config-scoreline-1d').addEventListener('change', function(e) {
 	grid.drawScorelines()
 })
@@ -901,6 +904,17 @@ function _selectedNotes(current) {
 	return current ? [current] : []
 }
 
+// 增加维度（批量）：有选区时按 useRoot 批量加到选中根音/选中音符，否则加到当前音符；返回新增的子音符
+function _addDimension(interval, useRoot) {
+	const targets = useRoot ? _selectedRoots(stage.current) : _selectedNotes(stage.current)
+	const added = []
+	for (const t of targets) {
+		if (!t) continue
+		added.push(t.addNote(t.len, interval))
+	}
+	return added
+}
+
 // 每音：横线粗细 (root) — 有选区时批量应用
 // 音符ごと：横線の太さ（ルート）— 選択時は一括適用
 // Per-note: pitch line thickness (root) — batch apply when selection exists
@@ -1592,6 +1606,17 @@ function rebuildCustomDimUI() {
 	bindCustomDimHandlers()
 }
 
+// 自定义维度总开关：不选中时全部子维度自动不选中（并隐藏其菜单按钮）
+$('#config-custom-dim-master').addEventListener('change', function() {
+	const on = this.checked
+	for (const input of document.querySelectorAll('.custom-dim-check input')) {
+		if (input.checked !== on) {
+			input.checked = on
+			input.dispatchEvent(new Event('change'))
+		}
+	}
+})
+
 // 为自定义维度按钮绑定处理函数
 // カスタム次元ボタンにハンドラをバインド // Bind handlers to custom dimension buttons
 function bindCustomDimHandlers() {
@@ -1616,8 +1641,7 @@ function bindCustomDimHandlers() {
 			if (!stage.current) return
 			history.snapshot()
 			const key = this.dataset.dim
-			const n = stage.current.addNote(stage.current.len, pitchIntervals[($('#root-ext-dir').checked ? '-' : '') + key])
-			n.playThis()
+			for (const n of _addDimension(pitchIntervals[($('#root-ext-dir').checked ? '-' : '') + key], true)) n.playThis()
 			rootlayer.batchDraw()
 			grid.autoLoop()
 		})
@@ -1641,8 +1665,7 @@ function bindCustomDimHandlers() {
 			if (!stage.current) return
 			history.snapshot()
 			const key = this.dataset.dim
-			const n = stage.current.addNote(stage.current.len, pitchIntervals[($('#ext-dir').checked ? '-' : '') + key])
-			n.playThis()
+			for (const n of _addDimension(pitchIntervals[($('#ext-dir').checked ? '-' : '') + key], false)) n.playThis()
 			rootlayer.batchDraw()
 			grid.autoLoop()
 		})
@@ -1846,10 +1869,10 @@ window.addEventListener('keydown', (e) => {
 	if (!interval) return
 	e.preventDefault(); e.stopPropagation()
 	history.snapshot()
-	const n = stage.current.addNote(stage.current.len, interval)
-	n.playThis()
-	if (shiftFocus) {
-		stage.current = n
+	const added = _addDimension(interval, false)
+	for (const n of added) n.playThis()
+	if (shiftFocus && added.length === 1) {
+		stage.current = added[0]
 	}
 	rootlayer.batchDraw()
 	grid.autoLoop()
@@ -2025,8 +2048,7 @@ for (const el of $$('.root-ext-btn')) {
 		// 自身と所定の音高差を持つnoteを追加する操作
 		if (!stage.current) return
 		history.snapshot()
-		const n = stage.current.addNote(stage.current.len, pitchIntervals[($('#root-ext-dir').checked ? '-' : '') + this.innerText])
-		n.playThis()
+		for (const n of _addDimension(pitchIntervals[($('#root-ext-dir').checked ? '-' : '') + this.innerText], true)) n.playThis()
 		rootlayer.batchDraw()
 	})
 }
@@ -2038,8 +2060,7 @@ for (const el of $$('.ext-btn')) {
 		// 自身と所定の音高差を持つnoteを追加する操作
 		if (!stage.current) return
 		history.snapshot()
-		const n = stage.current.addNote(stage.current.len, pitchIntervals[($('#ext-dir').checked ? '-' : '') + this.innerText])
-		n.playThis()
+		for (const n of _addDimension(pitchIntervals[($('#ext-dir').checked ? '-' : '') + this.innerText], false)) n.playThis()
 		rootlayer.batchDraw()
 	})
 }

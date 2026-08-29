@@ -231,17 +231,19 @@ export class Grid extends Konva.Layer {
 		if ($('#config-scoreline-3d').checked) this._drawSectionedLines(this.scorelines3, sections, this._3dInterval, '#6cd985', 3)
 		if ($('#config-scoreline-4d').checked) this._drawSectionedLines(this.scorelines4, sections, this._4dInterval, '#b598ee', 3)
 
-		// 主音线：按 tonic 符号分段，每段在对应 tonic 处画一条粗横线
+		// 主音线（0d 基准线）：按 tonic 符号分段，每段在对应 tonic 处画一条粗横线
 		this.tonicline.destroyChildren()
-		for (const sec of sections) {
-			const t = sec.value || this.tonic
-			const ty = hz2y(t)
-			if (!ty) continue
-			this.tonicline.add(new Konva.Line({
-				points: [sec.startX, ty, sec.endX, ty],
-				strokeWidth: 3,
-				stroke: '#b5b4c2'
-			}))
+		if ($('#config-scoreline-0d')?.checked) {
+			for (const sec of sections) {
+				const t = sec.value || this.tonic
+				const ty = hz2y(t)
+				if (!ty) continue
+				this.tonicline.add(new Konva.Line({
+					points: [sec.startX, ty, sec.endX, ty],
+					strokeWidth: 3,
+					stroke: '#b5b4c2'
+				}))
+			}
 		}
 		this.drawEdoLines()
 		this.adjust()
@@ -349,18 +351,21 @@ export class Grid extends Konva.Layer {
 	drawBeatlines() {
 		this.beatlines.destroyChildren()
 		if (!this.beat) return
-		const lineCount = Math.ceil(window.innerWidth / this.stage.scaleX() / 48) + 1
-		for (const i of range(lineCount)) {
-			this.beatlines.add(new Konva.Line({
-				x: 48 * i,
-				y: 0,
-				points: [0, 0, 0, window.innerHeight / this.stage.scaleY()],
-				strokeWidth: 1,
-				stroke: '#7e7d93'
-			}))
+		// 分割谱线未勾选时不画任何竖线（节拍竖线与细分线都不显示）
+		if ($('#config-subdivide-lines')?.checked) {
+			const lineCount = Math.ceil(window.innerWidth / this.stage.scaleX() / 48) + 1
+			for (const i of range(lineCount)) {
+				this.beatlines.add(new Konva.Line({
+					x: 48 * i,
+					y: 0,
+					points: [0, 0, 0, window.innerHeight / this.stage.scaleY()],
+					strokeWidth: 1,
+					stroke: '#7e7d93'
+				}))
+			}
+			// 细分谱线
+			this.drawSubdivisionLines()
 		}
-		// 细分谱线
-		this.drawSubdivisionLines()
 		this.adjust()
 		Tone.Transport.bpm.value = 60000 / ($('#config-beat').value || 500)
 	}
