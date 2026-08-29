@@ -766,17 +766,34 @@ export class SubNote extends Note {
 			e.cancelBubble = true  // 阻止冒泡到子音符，避免拖维度线时触发子音符拖动导致音高变化
 			this.linkLine.y(0)  // 垂直锁定，仅水平移动
 			// 实时让裁剪区域跟随当前偏移，保证整条线可见
-			const shift = this.linkLine.x() - (this.len * this.interval.t + this.delay)
-			this.linkContainer.clip({
-				x: this.delay + this.interval.m + shift,
-				y: this.interval.n > this.interval.d ? -1.5 : 1.5,
-				width: this.len + Math.abs(this.interval.m) * 2,
-				height: f2d(this.interval.d, this.interval.n) + (this.interval.n > this.interval.d ? 3 : -3)
-			})
+			if (this.interval.points) {
+				const xs = this.interval.points.map(p => this.len * p.x)
+				const minX = Math.min(...xs), maxX = Math.max(...xs)
+				const w = this.interval.w || 7
+				const shift = this.linkLine.x() - this.delay
+				this.linkContainer.clip({
+					x: this.delay + minX - w + shift,
+					y: this.interval.n > this.interval.d ? -1.5 : 1.5,
+					width: (maxX - minX) + w * 2,
+					height: f2d(this.interval.d, this.interval.n) + (this.interval.n > this.interval.d ? 3 : -3)
+				})
+			} else {
+				const shift = this.linkLine.x() - (this.len * this.interval.t + this.delay)
+				this.linkContainer.clip({
+					x: this.delay + this.interval.m + shift,
+					y: this.interval.n > this.interval.d ? -1.5 : 1.5,
+					width: this.len + Math.abs(this.interval.m) * 2,
+					height: f2d(this.interval.d, this.interval.n) + (this.interval.n > this.interval.d ? 3 : -3)
+				})
+			}
 		})
 		this.linkLine.on('dragend', e => {
 			e.cancelBubble = true
-			this._linkShiftX = this.linkLine.x() - (this.len * this.interval.t + this.delay)
+			if (this.interval.points) {
+				this._linkShiftX = this.linkLine.x() - this.delay
+			} else {
+				this._linkShiftX = this.linkLine.x() - (this.len * this.interval.t + this.delay)
+			}
 			this.stage.isNoteDragging = false
 		})
 		this.link.add(this.linkContainer.add(this.linkLine))
@@ -823,6 +840,17 @@ export class SubNote extends Note {
 	}
 	// 连线裁剪区域 // リンクのクリップ領域 // Link clipping region
 	get clip() {
+		if (this.interval.points) {
+			const xs = this.interval.points.map(p => this.len * p.x)
+			const minX = Math.min(...xs), maxX = Math.max(...xs)
+			const w = this.interval.w || 7
+			return {
+				x: this.delay + minX - w + (this._linkShiftX || 0),
+				y: this.interval.n > this.interval.d ? -1.5 : 1.5,
+				width: (maxX - minX) + w * 2,
+				height: f2d(this.interval.d, this.interval.n) + (this.interval.n > this.interval.d ? 3 : -3)
+			}
+		}
 		return {
 			x: this.delay + this.interval.m + (this._linkShiftX || 0),
 			y: this.interval.n > this.interval.d ? -1.5 : 1.5,
@@ -832,6 +860,24 @@ export class SubNote extends Note {
 	}
 	// 连线配置 // リンク設定 // Link configuration
 	get lineConfig() {
+		// 自定义维度线：使用归一化 points 数组（x: 0~1 音符内，y: 0=根音 1=子音）
+		if (this.interval.points) {
+			const flat = []
+			for (const p of this.interval.points) {
+				flat.push(this.len * p.x, f2d(this.interval.d, this.interval.n) * (1 - p.y))
+			}
+			return {
+				x: this.delay + (this._linkShiftX || 0),
+				y: 0,
+				points: flat,
+				lineCap: 'square',
+				tension: this.interval.curve ? 0.5 : 0,
+				stroke: this.interval.c,
+				strokeWidth: this.interval.w * (this.root?._linkThick || 1),
+				hitStrokeWidth: 12,
+				draggable: true
+			}
+		}
 		return {
 			x: this.len * this.interval.t + this.delay + (this._linkShiftX || 0),
 			y: 0,
@@ -966,6 +1012,9 @@ export class SubNote extends Note {
 			const negId = -interval.id
 			for (const [, pi] of Object.entries(pitchIntervals)) {
 				if (pi.id === negId) return pi
+			}
+			if (interval.points) {
+				return { ...interval, id: negId, n: interval.d, d: interval.n, points: [...interval.points].reverse().map(p => ({ x: p.x, y: 1 - p.y })) }
 			}
 			return { ...interval, id: negId, n: interval.d, d: interval.n, b: 1 - interval.b, t: 1 - interval.t, m: -interval.m }
 		}

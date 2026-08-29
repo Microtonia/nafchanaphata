@@ -279,6 +279,8 @@ export class Grid extends Konva.Layer {
 		this.scalelines.destroyChildren()
 		if (!$('#config-scale-lines')?.checked) return
 		const colorLines = $('#config-scale-color')?.checked
+		const thick = parseFloat($('#config-scale-thick')?.value) || 0.8
+		const depth = parseFloat($('#config-scale-depth')?.value) || 0.35
 		const segments = window._scale?.segments || [{ startX: -1e7, tones: window._scale?.tones || [] }]
 		// 以视口中心为基准、上下各铺约一屏（内容坐标），避免平移/缩放后下半部分谱线消失
 		const sy = this.stage.scaleY() || 1
@@ -298,9 +300,9 @@ export class Grid extends Konva.Layer {
 				for (let k = kMin; k <= kMax; k++) {
 					this.scalelines.add(new Konva.Line({
 						points: [s, yMod + 100 * k, e, yMod + 100 * k],
-						strokeWidth: 0.8,
+						strokeWidth: thick,
 						stroke: colorLines ? t.color : '#ffffff',
-						opacity: 0.35
+						opacity: depth
 					}))
 				}
 			}

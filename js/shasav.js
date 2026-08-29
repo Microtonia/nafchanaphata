@@ -330,6 +330,13 @@ $('#config-scale-color').addEventListener('change', function(e) {
 	grid.drawScaleLines()
 	grid.drawFifthLines()
 })
+// 调式谱线粗细/深度滑块：重绘调式谱线
+$('#config-scale-thick').addEventListener('input', function(e) {
+	grid.drawScaleLines()
+})
+$('#config-scale-depth').addEventListener('input', function(e) {
+	grid.drawScaleLines()
+})
 // 启用 6d/7d 维度 // 6d/7d 次元を有効化 // Enable 6d/7d dimensions
 $('#config-enable-6d').addEventListener('change', function(e) {
 	for (const i of $$('.btn-6d')) {
@@ -1536,11 +1543,17 @@ function rebuildCustomDimUI() {
 		const key = 'c' + idx, negKey = '-' + key
 		const pos = (nn / dd) % 1
 		const wl = normalizeWavelength(440 * nn / dd)
-		const color = wavelengthToRGB(wl)
+		const color = dim.color || wavelengthToRGB(wl)
 
-		// 注册到 pitchIntervals
-		pitchIntervals[key]   = { id: 100 + idx, n: nn, d: dd, c: color, w: 7, b: pos, t: pos, m: 0 }
-		pitchIntervals[negKey] = { id: -(100 + idx), n: dd, d: nn, c: color, w: 7, b: pos, t: pos, m: 0 }
+		// 注册到 pitchIntervals（支持自定义 points 样式与颜色）
+		if (dim.points && dim.points.length >= 2) {
+			const curve = !!dim.curve
+			pitchIntervals[key]   = { id: 100 + idx, n: nn, d: dd, c: color, w: 7, points: dim.points, curve }
+			pitchIntervals[negKey] = { id: -(100 + idx), n: dd, d: nn, c: color, w: 7, points: [...dim.points].reverse().map(p => ({ x: p.x, y: 1 - p.y })), curve }
+		} else {
+			pitchIntervals[key]   = { id: 100 + idx, n: nn, d: dd, c: color, w: 7, b: pos, t: pos, m: 0 }
+			pitchIntervals[negKey] = { id: -(100 + idx), n: dd, d: nn, c: color, w: 7, b: pos, t: pos, m: 0 }
+		}
 
 		// 从 pitchIntervals 回读作为唯一真相源
 		const pi = pitchIntervals[key]
@@ -1672,6 +1685,184 @@ function bindCustomDimHandlers() {
 	}
 }
 
+// ============ 维度线样式编辑器 ============
+let _dimPoints = []      // 归一化点 [{x, y}]，x: 0~1 音符内，y: 0=根音 1=子音
+let _dimColor = null     // 自定义颜色（null = 自动波长）
+let _dimCurve = false    // 是否曲线（false = 折线）
+let _dimDrag = -1        // -1 无，>=0 拖拽点索引，-2 整体移动
+let _dimDragStart = null // {mx, my, pts, moved}
+
+function _dimDefaultPoints(pos) {
+	return [{ x: pos, y: 0 }, { x: pos, y: 1 }]
+}
+function _dimCanvasRect() {
+	const cv = document.getElementById('custom-dim-style-canvas')
+	const pad = 18
+	return { pad, x0: pad, y0: pad, x1: cv.width - pad, y1: cv.height - pad }
+}
+function _dimToCanvas(p) {
+	const r = _dimCanvasRect()
+	return { cx: r.x0 + p.x * (r.x1 - r.x0), cy: r.y1 - p.y * (r.y1 - r.y0) }
+}
+function _dimFromCanvas(cx, cy) {
+	const r = _dimCanvasRect()
+	return {
+		x: Math.min(1, Math.max(0, (cx - r.x0) / (r.x1 - r.x0))),
+		y: Math.min(1, Math.max(0, (r.y1 - cy) / (r.y1 - r.y0)))
+	}
+}
+function _distToSegment(px, py, x1, y1, x2, y2) {
+	const dx = x2 - x1, dy = y2 - y1
+	const l2 = dx * dx + dy * dy
+	if (l2 === 0) return Math.hypot(px - x1, py - y1)
+	const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l2))
+	return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+}
+function _dimHitPoint(cx, cy) {
+	for (let i = 0; i < _dimPoints.length; i++) {
+		const p = _dimToCanvas(_dimPoints[i])
+		if (Math.hypot(p.cx - cx, p.cy - cy) < 10) return i
+	}
+	return -1
+}
+function _dimHitLine(cx, cy) {
+	for (let i = 0; i < _dimPoints.length - 1; i++) {
+		const a = _dimToCanvas(_dimPoints[i])
+		const b = _dimToCanvas(_dimPoints[i + 1])
+		if (_distToSegment(cx, cy, a.cx, a.cy, b.cx, b.cy) < 6) return true
+	}
+	return false
+}
+function renderDimStyleEditor() {
+	const cv = document.getElementById('custom-dim-style-canvas')
+	if (!cv) return
+	const ctx = cv.getContext('2d')
+	const W = cv.width, H = cv.height
+	ctx.clearRect(0, 0, W, H)
+	ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+	ctx.setLineDash([4, 4])
+	ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke()
+	ctx.setLineDash([])
+	if (_dimPoints.length < 2) return
+	const color = _dimColor || $('#custom-dim-style-color').value || '#ffc247'
+	ctx.strokeStyle = color
+	ctx.lineWidth = 2
+	ctx.lineJoin = 'round'
+	ctx.beginPath()
+	const cps = _dimPoints.map(p => _dimToCanvas(p))
+	ctx.moveTo(cps[0].cx, cps[0].cy)
+	if (_dimCurve) {
+		// 平滑曲线（中点二次贝塞尔）
+		for (let i = 1; i < cps.length - 1; i++) {
+			const mx = (cps[i].cx + cps[i + 1].cx) / 2
+			const my = (cps[i].cy + cps[i + 1].cy) / 2
+			ctx.quadraticCurveTo(cps[i].cx, cps[i].cy, mx, my)
+		}
+		ctx.lineTo(cps[cps.length - 1].cx, cps[cps.length - 1].cy)
+	} else {
+		for (let i = 1; i < cps.length; i++) ctx.lineTo(cps[i].cx, cps[i].cy)
+	}
+	ctx.stroke()
+	for (let i = 0; i < _dimPoints.length; i++) {
+		const c = _dimToCanvas(_dimPoints[i])
+		const end = (i === 0 || i === _dimPoints.length - 1)
+		ctx.fillStyle = end ? color : '#ffffff'
+		ctx.strokeStyle = '#ffffff'
+		ctx.lineWidth = 1
+		ctx.beginPath()
+		ctx.arc(c.cx, c.cy, end ? 5 : 3.5, 0, 7)
+		ctx.fill(); ctx.stroke()
+	}
+}
+function initDimStyleEditor(reset) {
+	const n = parseInt($('#custom-dim-n').value) || 5
+	const d = parseInt($('#custom-dim-d').value) || 3
+	const pos = (n / d) % 1
+	if (reset || _dimPoints.length < 2) _dimPoints = _dimDefaultPoints(pos)
+	_dimColor = null
+	if (reset) {
+		_dimCurve = false
+		const curveInput = $('#custom-dim-curve')
+		if (curveInput) curveInput.checked = false
+	}
+	const colorInput = $('#custom-dim-style-color')
+	if (colorInput) colorInput.value = '#ffffff'
+	$('#custom-dim-style-color-hex').textContent = '自动'
+	renderDimStyleEditor()
+}
+
+// 编辑器交互
+{
+	const cv = document.getElementById('custom-dim-style-canvas')
+	const getPos = e => {
+		const rect = cv.getBoundingClientRect()
+		return {
+			cx: (e.clientX - rect.left) * (cv.width / rect.width),
+			cy: (e.clientY - rect.top) * (cv.height / rect.height)
+		}
+	}
+	cv.addEventListener('mousedown', e => {
+		const { cx, cy } = getPos(e)
+		const hit = _dimHitPoint(cx, cy)
+		if (hit >= 0) {
+			_dimDrag = hit
+		} else if (_dimHitLine(cx, cy)) {
+			_dimDrag = -2
+			_dimDragStart = { mx: cx, my: cy, pts: _dimPoints.map(p => ({ ...p })), moved: false }
+		} else {
+			_dimDrag = -1
+		}
+		e.preventDefault()
+	})
+	window.addEventListener('mousemove', e => {
+		if (_dimDrag === -1) return
+		const { cx, cy } = getPos(e)
+		if (_dimDrag >= 0) {
+			_dimPoints[_dimDrag] = _dimFromCanvas(cx, cy)
+			renderDimStyleEditor()
+		} else if (_dimDrag === -2) {
+			const s = _dimDragStart
+			if (Math.abs(cx - s.mx) > 3) s.moved = true
+			if (s.moved) {
+				const r = _dimCanvasRect()
+				const dxNorm = (cx - s.mx) / (r.x1 - r.x0)
+				_dimPoints = s.pts.map(p => ({ x: Math.min(1, Math.max(0, p.x + dxNorm)), y: p.y }))
+				renderDimStyleEditor()
+			}
+		}
+	})
+	window.addEventListener('mouseup', e => {
+		if (_dimDrag === -2 && _dimDragStart && !_dimDragStart.moved) {
+			const { cx, cy } = getPos(e)
+			let bestIdx = -1, bestD = Infinity
+			for (let i = 0; i < _dimPoints.length - 1; i++) {
+				const a = _dimToCanvas(_dimPoints[i])
+				const b = _dimToCanvas(_dimPoints[i + 1])
+				const d = _distToSegment(cx, cy, a.cx, a.cy, b.cx, b.cy)
+				if (d < bestD) { bestD = d; bestIdx = i }
+			}
+			if (bestIdx >= 0) {
+				_dimPoints.splice(bestIdx + 1, 0, _dimFromCanvas(cx, cy))
+				renderDimStyleEditor()
+			}
+		}
+		_dimDrag = -1
+		_dimDragStart = null
+	})
+}
+$('#custom-dim-style-color').addEventListener('input', function() {
+	_dimColor = this.value
+	$('#custom-dim-style-color-hex').textContent = this.value
+	renderDimStyleEditor()
+})
+$('#custom-dim-curve').addEventListener('change', function() {
+	_dimCurve = this.checked
+	renderDimStyleEditor()
+})
+$('#custom-dim-style-reset').addEventListener('click', function() {
+	initDimStyleEditor(true)
+})
+
 // 更新弹窗预览
 // ポップアッププレビューを更新 // Update popup preview
 function updateCustomDimPreview() {
@@ -1685,6 +1876,18 @@ function updateCustomDimPreview() {
 	const color = wavelengthToRGB(wl)
 	$('#custom-dim-color-preview').style.background = color
 	$('#custom-dim-wavelength').textContent = wl.toFixed(0) + 'nm'
+	// 样式编辑器：若仍是默认竖线（两点同 x），跟随新比例更新竖线位置
+	if (_dimPoints.length === 2 && Math.abs(_dimPoints[0].x - _dimPoints[1].x) < 1e-6) {
+		_dimPoints[0].x = pos
+		_dimPoints[1].x = pos
+	}
+	// 无自定义颜色时，编辑器颜色跟随自动波长颜色
+	if (_dimColor == null) {
+		const ci = $('#custom-dim-style-color')
+		if (ci) ci.value = color
+		$('#custom-dim-style-color-hex').textContent = '自动'
+	}
+	renderDimStyleEditor()
 }
 
 // 渲染弹窗已保存列表
@@ -1697,7 +1900,7 @@ function renderCustomDimList() {
 			const label = n + '/' + d
 			const pos = (n / d) % 1
 			const wl = normalizeWavelength(440 * n / d)
-			const color = wavelengthToRGB(wl)
+			const color = dim.color || wavelengthToRGB(wl)
 			return `<div class="dim-item">
 				<div class="dim-row">
 					<div class="dim-color" style="background:${color}"></div>
@@ -1723,6 +1926,7 @@ function renderCustomDimList() {
 // ポップアップイベント：次元管理ポップアップを開く // Popup events: open manage dimensions popup
 $('#custom-dim-btn').addEventListener('click', () => {
 	renderCustomDimList()
+	initDimStyleEditor(true)
 	updateCustomDimPreview()
 	$('#custom-dim-modal').style.display = 'flex'
 })
@@ -1749,10 +1953,16 @@ $('#custom-dim-save-btn').addEventListener('click', () => {
 	const n = parseInt($('#custom-dim-n').value)
 	const d = parseInt($('#custom-dim-d').value)
 	if (!n || !d || n <= d) return // 必须 n > d > 0
-	customDimList.push({ n: n, d: d, enabled: true })
+	customDimList.push({
+		n: n, d: d, enabled: true,
+		points: _dimPoints.map(p => ({ x: p.x, y: p.y })),
+		color: _dimColor || null,
+		curve: _dimCurve
+	})
 	saveCustomDims()
 	renderCustomDimList()
 	rebuildCustomDimUI()
+	initDimStyleEditor(true)
 })
 
 // 初始化自定义维度 UI // カスタム次元 UI を初期化 // Initialize custom dimension UI
