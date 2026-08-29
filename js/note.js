@@ -521,15 +521,21 @@ export class RootNote extends Note {
 	// Quantize: snap Y coordinate to nearest allowed frequency (snap to scale tones when scale enabled)
 	quantize() {
 		const x = this.x()
-		const scaleEnable = $('#config-scale-enable')
-		const tones = (scaleEnable?.checked && window._scaleTonesAt) ? window._scaleTonesAt(x) : []
-		if (tones.length && window._snapToScale) {
-			this.y(window._snapToScale(this.y(), x))
+		const msEnable = $('#config-master-slave-extend')
+		if (msEnable?.checked && window._snapToMasterSlave) {
+			this.y(window._snapToMasterSlave(this.y()))
 			this._hz = y2hz(this.y())
 		} else {
-			const st = window._getStaffState ? window._getStaffState(x) : null
-			this._hz = qb(y2hz(this.y()), st?.tonic, st?.edo)
-			this.y(hz2y(this._hz))
+			const scaleEnable = $('#config-scale-enable')
+			const tones = (scaleEnable?.checked && window._scaleTonesAt) ? window._scaleTonesAt(x) : []
+			if (tones.length && window._snapToScale) {
+				this.y(window._snapToScale(this.y(), x))
+				this._hz = y2hz(this.y())
+			} else {
+				const st = window._getStaffState ? window._getStaffState(x) : null
+				this._hz = qb(y2hz(this.y()), st?.tonic, st?.edo)
+				this.y(hz2y(this._hz))
+			}
 		}
 		for (const n of this.childNotes.children) n.quantize()
 		this.updateColor()

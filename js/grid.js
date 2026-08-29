@@ -280,7 +280,6 @@ export class Grid extends Konva.Layer {
 	drawScaleLines() {
 		this.scalelines.destroyChildren()
 		if (!$('#config-scale-lines')?.checked) return
-		const colorLines = $('#config-scale-color')?.checked
 		const thick = parseFloat($('#config-scale-thick')?.value) || 0.8
 		const depth = parseFloat($('#config-scale-depth')?.value) || 0.35
 		const segments = window._scale?.segments || [{ startX: -1e7, tones: window._scale?.tones || [] }]
@@ -303,7 +302,7 @@ export class Grid extends Konva.Layer {
 					this.scalelines.add(new Konva.Line({
 						points: [s, yMod + 100 * k, e, yMod + 100 * k],
 						strokeWidth: thick,
-						stroke: colorLines ? t.color : '#ffffff',
+						stroke: t.color || '#ffffff',
 						opacity: depth
 					}))
 				}
@@ -315,7 +314,6 @@ export class Grid extends Konva.Layer {
 	drawFifthLines() {
 		this.fifthlines.destroyChildren()
 		if (!$('#config-fifth-extend')?.checked) return
-		const colorLines = $('#config-scale-color')?.checked
 		const segments = window._fifth?.segments || []
 		const interval = this._2dInterval   // 五度（3/2）间距
 		const sy = this.stage.scaleY() || 1
@@ -331,10 +329,10 @@ export class Grid extends Konva.Layer {
 			if (s >= e) continue
 			const rootY = hz2y(seg.rootHz)
 			if (rootY == null) continue
-			const bases = [{ y: rootY, color: colorLines ? '#f27992' : '#ffffff' }]
+			const bases = [{ y: rootY, color: '#ffffff' }]
 			if (seg.xdHz != null) {
 				const xdY = hz2y(seg.xdHz)
-				if (xdY != null) bases.push({ y: xdY, color: colorLines ? (seg.xdColor || '#ffffff') : '#ffffff' })
+				if (xdY != null) bases.push({ y: xdY, color: seg.xdColor || '#ffffff' })
 			}
 			for (const b of bases) {
 				const kMin = Math.floor((topY - b.y) / interval) - 1
@@ -357,7 +355,6 @@ export class Grid extends Konva.Layer {
 		if (!$('#config-master-slave-extend')?.checked) return
 		const ms = window._masterSlave
 		if (!ms) return
-		const colorLines = $('#config-scale-color')?.checked
 		const rootHz = ms.rootHz || this.tonic
 		const main = pitchIntervals[ms.mainKey] || pitchIntervals['2d']
 		const sub = pitchIntervals[ms.subKey] || pitchIntervals['3d']
@@ -373,15 +370,15 @@ export class Grid extends Konva.Layer {
 		const bottomY = centerY + viewH + 200
 		const kMin = Math.floor((topY - rootY) / intervalMain) - 1
 		const kMax = Math.ceil((bottomY - rootY) / intervalMain) + 1
-		const mainColor = colorLines ? (main.c || '#ffffff') : '#ffffff'
-		const subColor = colorLines ? (sub.c || '#ffffff') : '#ffffff'
+		const mainColor = main.c || '#ffffff'
+		const subColor = sub.c || '#ffffff'
 		for (let k = kMin; k <= kMax; k++) {
 			const my = rootY + intervalMain * k
-			// 主维度线
+			// 主维度线（基准线 k=0 用白色，其余用主维度色）
 			this.masterslavelines.add(new Konva.Line({
 				points: [-1e7, my, 1e7, my],
 				strokeWidth: 0.8,
-				stroke: mainColor,
+				stroke: k === 0 ? '#ffffff' : mainColor,
 				opacity: 0.35
 			}))
 			// 从维度线：基于主维度线向上附加一条

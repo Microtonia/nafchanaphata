@@ -4,7 +4,7 @@
  * Main application module: initialization, keyboard bindings, Config panel, custom dimension system, ext shortcuts, import/export and zoom control
  */
 
-import { $, $$, pitchIntervals, x2t, hz2y, OFFSET } from './util.js';
+import { $, $$, pitchIntervals, x2t, hz2y, f2d, OFFSET } from './util.js';
 import { Serializer } from './serialize.js';
 import history from './history.js';
 import { switchTones } from './sound.js';
@@ -200,9 +200,29 @@ function snapToScale(y, x) {
 	if (dy < -50) dy += 100
 	return y + dy
 }
+
+// 吸附 y 坐标到最近的主从扩展谱线（主维度线 + 从维度线）
+function snapToMasterSlave(y) {
+	const ms = window._masterSlave
+	const rootHz = ms?.rootHz || grid.tonic
+	if (!rootHz) return y
+	const main = pitchIntervals[ms.mainKey] || pitchIntervals['2d']
+	const sub = pitchIntervals[ms.subKey] || pitchIntervals['3d']
+	const intervalMain = f2d(main.d, main.n)
+	const intervalSub = f2d(sub.d, sub.n)
+	if (!intervalMain || !intervalSub) return y
+	const rootY = hz2y(rootHz)
+	if (rootY == null) return y
+	const kMain = Math.round((y - rootY) / intervalMain)
+	const mainY = rootY + intervalMain * kMain
+	const kSub = Math.round((y + intervalSub - rootY) / intervalMain)
+	const subY = rootY + intervalMain * kSub - intervalSub
+	return Math.abs(y - mainY) <= Math.abs(y - subY) ? mainY : subY
+}
 window._collectScale = collectScale
 window._snapToScale = snapToScale
 window._scaleTonesAt = scaleTonesAt
+window._snapToMasterSlave = snapToMasterSlave
 
 // 获取 x 位置对应的五度扩展段对象 // x位置に対応する五度拡張セグメントを取得
 function fifthSegmentAt(x) {
@@ -348,11 +368,6 @@ $('#config-master-slave-extend').addEventListener('change', function(e) {
 		grid.drawFifthLines()
 		_openMasterSlaveModal()
 	}
-	grid.drawMasterSlaveLines()
-})
-$('#config-scale-color').addEventListener('change', function(e) {
-	grid.drawScaleLines()
-	grid.drawFifthLines()
 	grid.drawMasterSlaveLines()
 })
 // 调式谱线粗细/深度滑块：重绘调式谱线

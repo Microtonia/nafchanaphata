@@ -72,15 +72,21 @@ stage.on('pointerclick', e => {
 	// 调式启用时：吸附到该位置对应调式段的调式内音（含八度转位），并跳过 EDO 量化保留精确音高
 	let noteY = pos.y
 	let noteHz = null
-	const scaleEnable = document.getElementById('config-scale-enable')
-	const tones = (scaleEnable?.checked && window._scaleTonesAt) ? window._scaleTonesAt(pos.x) : []
-	if (tones.length && window._snapToScale) {
-		noteY = window._snapToScale(pos.y, pos.x)
+	const msEnable = document.getElementById('config-master-slave-extend')
+	if (msEnable?.checked && window._snapToMasterSlave) {
+		noteY = window._snapToMasterSlave(pos.y)
 		noteHz = y2hz(noteY)
-	} else if (st) {
-		// 按谱表符号分段 tonic/edo 量化
-		noteHz = qb(y2hz(pos.y), st.tonic, st.edo)
-		noteY = hz2y(noteHz)
+	} else {
+		const scaleEnable = document.getElementById('config-scale-enable')
+		const tones = (scaleEnable?.checked && window._scaleTonesAt) ? window._scaleTonesAt(pos.x) : []
+		if (tones.length && window._snapToScale) {
+			noteY = window._snapToScale(pos.y, pos.x)
+			noteHz = y2hz(noteY)
+		} else if (st) {
+			// 按谱表符号分段 tonic/edo 量化
+			noteHz = qb(y2hz(pos.y), st.tonic, st.edo)
+			noteY = hz2y(noteHz)
+		}
 	}
 	const root = new RootNote(stage, qh(pos.x, st?.tick), noteY, len, noteHz)
 	rootlayer.add(root)
