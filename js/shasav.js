@@ -132,6 +132,8 @@ $('#config-edo').addEventListener('change', function(e) {
 window._scale = { segments: [{ startX: -Infinity, tones: [] }], tones: [] }
 // 五度扩展：选中和弦的根音(0d) + 非 2d 直接子音(xd) 作为五度堆叠基准（按 scale 符号分段）
 window._fifth = { segments: [{ startX: -Infinity, rootHz: null, xdHz: null, xdColor: null }] }
+// 主从扩展：弹窗设定基准音高 + 主维度（叠加）+ 从维度（基于主维度线附加）
+window._masterSlave = { rootHz: null, mainKey: '2d', subKey: '3d' }
 
 // 获取 x 位置对应的调式段对象 // x位置に対応する調式セグメントを取得
 function scaleSegmentAt(x) {
@@ -295,6 +297,7 @@ window._staffChanged = function() {
 	grid.drawScorelines()
 	grid.drawScaleLines()
 	grid.drawFifthLines()
+	grid.drawMasterSlaveLines()
 	grid.drawBeatlines()
 }
 
@@ -317,18 +320,40 @@ $('#config-scale-enable').addEventListener('change', function(e) {
 	// 仅启用/禁用调式限制；调式内音通过「选中和弦后按 D 键」设定
 })
 $('#config-scale-lines').addEventListener('change', function(e) {
-	// 与五度扩展互斥：勾选调式谱线时取消五度扩展
-	if (this.checked) { $('#config-fifth-extend').checked = false; grid.drawFifthLines() }
+	// 与五度扩展/主从扩展互斥：勾选调式谱线时取消另外两个
+	if (this.checked) {
+		$('#config-fifth-extend').checked = false
+		$('#config-master-slave-extend').checked = false
+		grid.drawFifthLines()
+		grid.drawMasterSlaveLines()
+	}
 	grid.drawScaleLines()
 })
 $('#config-fifth-extend').addEventListener('change', function(e) {
-	// 与调式谱线互斥：勾选五度扩展时取消调式谱线
-	if (this.checked) { $('#config-scale-lines').checked = false; grid.drawScaleLines() }
+	// 与调式谱线/主从扩展互斥：勾选五度扩展时取消另外两个
+	if (this.checked) {
+		$('#config-scale-lines').checked = false
+		$('#config-master-slave-extend').checked = false
+		grid.drawScaleLines()
+		grid.drawMasterSlaveLines()
+	}
 	grid.drawFifthLines()
+})
+$('#config-master-slave-extend').addEventListener('change', function(e) {
+	// 与调式谱线/五度扩展互斥：勾选主从扩展时取消另外两个，并弹出设置弹窗
+	if (this.checked) {
+		$('#config-scale-lines').checked = false
+		$('#config-fifth-extend').checked = false
+		grid.drawScaleLines()
+		grid.drawFifthLines()
+		_openMasterSlaveModal()
+	}
+	grid.drawMasterSlaveLines()
 })
 $('#config-scale-color').addEventListener('change', function(e) {
 	grid.drawScaleLines()
 	grid.drawFifthLines()
+	grid.drawMasterSlaveLines()
 })
 // 调式谱线粗细/深度滑块：重绘调式谱线
 $('#config-scale-thick').addEventListener('input', function(e) {
@@ -337,6 +362,57 @@ $('#config-scale-thick').addEventListener('input', function(e) {
 $('#config-scale-depth').addEventListener('input', function(e) {
 	grid.drawScaleLines()
 })
+
+// ========== 主从扩展弹窗 ==========
+// 构建主从扩展的维度下拉选项（内置 1d~7d + 自定义维度正键）
+function _buildMasterSlaveDimOptions() {
+	const mainSel = $('#ms-main-dim')
+	const subSel = $('#ms-sub-dim')
+	if (!mainSel || !subSel) return
+	const opts = []
+	for (let i = 1; i <= 7; i++) {
+		const key = i + 'd'
+		const iv = pitchIntervals[key]
+		if (!iv) continue
+		opts.push({ key, label: key + ' (' + iv.n + '/' + iv.d + ')' })
+	}
+	for (const k of Object.keys(pitchIntervals)) {
+		if (!/^c\d+$/.test(k)) continue
+		const iv = pitchIntervals[k]
+		if (!iv || iv.n <= iv.d) continue
+		opts.push({ key: k, label: iv.n + '/' + iv.d })
+	}
+	const html = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('')
+	mainSel.innerHTML = html
+	subSel.innerHTML = html
+}
+// 打开主从扩展设置弹窗：基准音高默认当前基准音高
+function _openMasterSlaveModal() {
+	_buildMasterSlaveDimOptions()
+	const ms = window._masterSlave
+	$('#ms-base-hz').value = ms.rootHz || grid.tonic || 440
+	const mainSel = $('#ms-main-dim')
+	const subSel = $('#ms-sub-dim')
+	if (mainSel && pitchIntervals[ms.mainKey]) mainSel.value = ms.mainKey
+	if (subSel && pitchIntervals[ms.subKey]) subSel.value = ms.subKey
+	$('#master-slave-modal').style.display = 'flex'
+}
+$('#ms-apply-btn').addEventListener('click', () => {
+	const ms = window._masterSlave
+	const hz = parseFloat($('#ms-base-hz').value)
+	if (hz && hz >= 20 && hz <= 20000) ms.rootHz = hz
+	ms.mainKey = $('#ms-main-dim').value || '2d'
+	ms.subKey = $('#ms-sub-dim').value || '3d'
+	grid.drawMasterSlaveLines()
+	$('#master-slave-modal').style.display = 'none'
+})
+$('#ms-close-btn').addEventListener('click', () => {
+	$('#master-slave-modal').style.display = 'none'
+})
+$('#master-slave-modal').addEventListener('click', function(e) {
+	if (e.target === this) this.style.display = 'none'
+})
+
 // 启用 6d/7d 维度 // 6d/7d 次元を有効化 // Enable 6d/7d dimensions
 $('#config-enable-6d').addEventListener('change', function(e) {
 	for (const i of $$('.btn-6d')) {
@@ -2335,6 +2411,7 @@ document.addEventListener('wheel', (e) => {
 	grid.drawScorelines()
 	grid.drawScaleLines()
 	grid.drawFifthLines()
+	grid.drawMasterSlaveLines()
 	grid.drawBeatlines()
 	grid.fixArrowScale()
 	grid.adjust()

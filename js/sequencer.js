@@ -108,6 +108,7 @@ stage.on('pinchmove', e => {
 	grid.drawScorelines()
 	grid.drawScaleLines()
 	grid.drawFifthLines()
+	grid.drawMasterSlaveLines()
 	grid.drawBeatlines()
 	grid.fixArrowScale()
 	grid.adjust()

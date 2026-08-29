@@ -3,7 +3,7 @@
  * グリッドレイヤーモジュール — ピッチスコアライン、ビートライン、ループ矢印、再生インジケーター
  * Grid layer module — pitch score-lines, beat lines, loop arrows, playback indicator
  */
-import { $, range, hz2y, x2t, t2x, f2d, qh, OFFSET } from './util.js'
+import { $, range, hz2y, x2t, t2x, f2d, qh, OFFSET, pitchIntervals } from './util.js'
 import { rootlayer } from './sequencer.js'
 
 // 网格类：管理所有背景参考线、播放指示器和循环控制 / グリッドクラス：背景参照線、再生インジケーター、ループ制御を管理 / Grid class: manages background reference lines, playback indicator, and loop controls
@@ -32,6 +32,7 @@ export class Grid extends Konva.Layer {
 		this.edolines = new Konva.Group()
 		this.scalelines = new Konva.Group()
 		this.fifthlines = new Konva.Group()
+		this.masterslavelines = new Konva.Group()
 		this.tonicline = new Konva.Group()
 		
 		this.indicator = new Konva.Line({
@@ -108,7 +109,7 @@ export class Grid extends Konva.Layer {
 		})
 		this.setLoop()
 		
-		this.add(this.edolines, this.fifthlines, this.scalelines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
+		this.add(this.edolines, this.fifthlines, this.masterslavelines, this.scalelines, this.scorelines4, this.scorelines3, this.scorelines2, this.scorelines, this.beatlines, this.tonicline, this.indicator, this.loopEnd, this.loopStart)
 		// 非交互元素禁用 hit 检测，减少大量网格线的碰撞计算 / 非インタラクティブ要素のヒット検出を無効化し、大量のグリッド線の衝突計算を削減 / Disable hit detection on non-interactive elements to reduce collision checks
 		this.scorelines.listening(false)
 		this.scorelines2.listening(false)
@@ -118,6 +119,7 @@ export class Grid extends Konva.Layer {
 		this.edolines.listening(false)
 		this.scalelines.listening(false)
 		this.fifthlines.listening(false)
+		this.masterslavelines.listening(false)
 		this.tonicline.listening(false)
 		this.indicator.listening(false)
 		this.drawScorelines()
@@ -349,6 +351,49 @@ export class Grid extends Konva.Layer {
 		}
 	}
 
+	// 绘制主从扩展谱线：基准音高按主维度上下堆叠，从维度线基于每条主维度线再向上附加
+	drawMasterSlaveLines() {
+		this.masterslavelines.destroyChildren()
+		if (!$('#config-master-slave-extend')?.checked) return
+		const ms = window._masterSlave
+		if (!ms) return
+		const colorLines = $('#config-scale-color')?.checked
+		const rootHz = ms.rootHz || this.tonic
+		const main = pitchIntervals[ms.mainKey] || pitchIntervals['2d']
+		const sub = pitchIntervals[ms.subKey] || pitchIntervals['3d']
+		const rootY = hz2y(rootHz)
+		if (rootY == null) return
+		const intervalMain = f2d(main.d, main.n)   // 主维度间距
+		const intervalSub = f2d(sub.d, sub.n)      // 从维度间距
+		if (!intervalMain || !intervalSub) return
+		const sy = this.stage.scaleY() || 1
+		const viewH = window.innerHeight / sy
+		const centerY = (window.innerHeight / 2 - this.stage.y()) / sy
+		const topY = centerY - viewH - 200
+		const bottomY = centerY + viewH + 200
+		const kMin = Math.floor((topY - rootY) / intervalMain) - 1
+		const kMax = Math.ceil((bottomY - rootY) / intervalMain) + 1
+		const mainColor = colorLines ? (main.c || '#ffffff') : '#ffffff'
+		const subColor = colorLines ? (sub.c || '#ffffff') : '#ffffff'
+		for (let k = kMin; k <= kMax; k++) {
+			const my = rootY + intervalMain * k
+			// 主维度线
+			this.masterslavelines.add(new Konva.Line({
+				points: [-1e7, my, 1e7, my],
+				strokeWidth: 0.8,
+				stroke: mainColor,
+				opacity: 0.35
+			}))
+			// 从维度线：基于主维度线向上附加一条
+			this.masterslavelines.add(new Konva.Line({
+				points: [-1e7, my - intervalSub, 1e7, my - intervalSub],
+				strokeWidth: 0.8,
+				stroke: subColor,
+				opacity: 0.35
+			}))
+		}
+	}
+
 	// 绘制节拍竖线 / ビート縦線を描画 / Draw beat vertical lines
 	drawBeatlines() {
 		this.beatlines.destroyChildren()
@@ -424,6 +469,8 @@ export class Grid extends Konva.Layer {
 		this.scalelines.y(0)
 		this.fifthlines.x(0)
 		this.fifthlines.y(0)
+		this.masterslavelines.x(0)
+		this.masterslavelines.y(0)
 		this.tonicline.x(0)
 		this.tonicline.y(0)
 

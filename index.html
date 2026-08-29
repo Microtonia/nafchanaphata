@@ -418,6 +418,12 @@
 		</label>
 	</nav>
 	<nav>
+		<span class="max" data-i18n="master-slave-extend">主从扩展</span>
+		<label class="checkbox">
+			<input id="config-master-slave-extend" type="checkbox"><span></span>
+		</label>
+	</nav>
+	<nav>
 		<span class="max" data-i18n="scale-thick">谱线粗细</span>
 		<label class="slider">
 			<input id="config-scale-thick" type="range" value="0.8" min="0.8" max="6" step="0.2">
@@ -713,6 +719,30 @@
 		</div>
 		<div style="margin-top:12px; text-align:right;">
 			<button id="custom-dim-close-btn" class="small-round" style="background:#666; color:#fff; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" data-i18n="close">关闭</button>
+		</div>
+	</div>
+</div>
+
+<!-- 主从扩展弹窗 -->
+<div class="modal" id="master-slave-modal">
+	<div class="modal-content" style="max-width:340px; background:#2a2a3e; color:#ddd; border-radius:8px; padding:16px;">
+		<h5 data-i18n="ms-title" style="margin-top:0">主从扩展</h5>
+		<div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+			<span data-i18n="ms-base" style="font-size:12px; white-space:nowrap;">基准音高</span>
+			<input id="ms-base-hz" type="number" min="20" max="20000" step="1" value="440" style="width:90px; background:#3a3a56; color:#fff; border:1px solid #555; border-radius:4px; padding:4px; text-align:center;">
+			<span style="font-size:11px; color:#aaa;">Hz</span>
+		</div>
+		<div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+			<span data-i18n="ms-main" style="font-size:12px; white-space:nowrap;">主维度</span>
+			<select id="ms-main-dim" style="flex:1; background:#3a3a56; color:#fff; border:1px solid #555; border-radius:4px; padding:4px;"></select>
+		</div>
+		<div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+			<span data-i18n="ms-sub" style="font-size:12px; white-space:nowrap;">从维度</span>
+			<select id="ms-sub-dim" style="flex:1; background:#3a3a56; color:#fff; border:1px solid #555; border-radius:4px; padding:4px;"></select>
+		</div>
+		<div style="display:flex; gap:8px; justify-content:flex-end;">
+			<button id="ms-apply-btn" class="small-round" style="background:#4CAF50; color:#fff; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" data-i18n="ms-apply">应用</button>
+			<button id="ms-close-btn" class="small-round" style="background:#666; color:#fff; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" data-i18n="close">关闭</button>
 		</div>
 	</div>
 </div>
