@@ -8,7 +8,7 @@ import {makePincher} from './pincher.js'
 import {Grid} from './grid.js'
 import {RootNote} from './note.js'
 import history from './history.js'
-import { x2t, y2hz, hz2y, qb, qh, OFFSET } from './util.js'
+import { x2t, y2hz, hz2y, qb, qh, OFFSET, BAR_VIEW_SLOT, BAR_VIEW_PAD } from './util.js'
 
 // Konva 舞台设置：全屏可拖拽画布
 // Konvaステージ設定：全画面ドラッグ可能キャンバス
@@ -39,6 +39,32 @@ stage.on('pointerclick', e => {
 	// selection 系统设置了 _preventClick → 跳过音符创建 / selectionシステムが_preventClickを設定→音符作成をスキップ / Selection system set _preventClick → skip note creation
 	if (window._sel?._preventClick) return
 	const pos = stage.getRelativePointerPosition()
+	// === 小节视图：点击空白增加音（1拍分辨率 + 相同起始）===
+	if (window._barView) {
+		if (window._sel) { window._sel._lastClickX = pos.x; window._sel._lastClickY = pos.y }
+		if (e.evt.shiftKey) return
+		if (window._sel) window._sel.clear()
+		history.snapshot()
+		const bars = window._barViewData?.bars
+		if (bars && bars.length) {
+			let bi = bars.length - 1
+			for (let i = 0; i < bars.length; i++) {
+				if (pos.x >= bars[i].vStart && pos.x < bars[i].vStart + bars[i].slotW) { bi = i; break }
+			}
+			const bar = bars[bi]
+			const st = window._getStaffState ? window._getStaffState(bar.oStart) : null
+			const noteHz = qb(y2hz(pos.y), st?.tonic, st?.edo)
+			const noteY = hz2y(noteHz)
+			const root = new RootNote(stage, bar.vStart + BAR_VIEW_PAD, noteY, 48, noteHz)
+			root._timeX = bar.oStart
+			root._timeLen = 48
+			rootlayer.add(root)
+			stage.current = root
+			root.playThis()
+		}
+		rootlayer.draw()
+		return
+	}
 	// 非卷帘模式：点击移动播放线（播放中则直接跳转继续播放）
 	// 非ピアノロールモード：クリックで再生線を移動（再生中は直接ジャンプして続行）
 	// Non-piano-roll mode: click moves playback line (during playback, jumps directly and continues)

@@ -31,6 +31,36 @@
 	display: none;
 }
 
+/* 维度按钮网格（进行/转写/扩展）：7 列 + 垂直滚动，避免弹窗过宽 */
+.dim-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.dim-buttons {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+	max-height: 140px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	background: #1a1a2e;
+	border: 1px solid #555;
+	border-radius: 4px;
+	padding: 4px;
+	justify-items: center;
+	align-items: center;
+	margin-top: 2px;
+}
+
+/* 音符编辑弹窗：整体缩放 + 垂直滚动（字体/大小可在 Config 调节） */
+#rootmenu, #menu {
+	max-height: 80vh;
+	overflow-y: auto;
+	font-size: var(--popup-font, 13px);
+	zoom: var(--popup-scale, 0.85);
+}
+
 .hz::after {
 	content: " Hz"
 }
@@ -269,6 +299,17 @@ a.disabled {
 	top: 0; left: 0; width: 100%; height: 100%;
 	background: rgba(0,0,0,0.6);
 	z-index: 1001;
+	justify-content: center;
+	align-items: center;
+}
+
+/* 视频录制进度弹窗 */
+#video-export-modal {
+	display: none;
+	position: fixed;
+	top: 0; left: 0; width: 100%; height: 100%;
+	background: rgba(0,0,0,0.6);
+	z-index: 1002;
 	justify-content: center;
 	align-items: center;
 }

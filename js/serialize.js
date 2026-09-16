@@ -20,7 +20,7 @@ export class Serializer {
 	// 序列化主入口：将当前工程序列化为 JSON 字符串（可选 crush 压缩）
 	// シリアライズメインエントリ：現在のプロジェクトをJSON文字列にシリアライズ（オプションでcrush圧縮）
 	// Main serialize entry: serializes current project to JSON string (optional crush compression)
-	static serialize(savegrid, crush = true) {
+	static serialize(savegrid, crush = true, useRootLayer = false) {
 		// 序列化调式段（仅保存/加载 .naf 时保存；历史快照不保存，避免撤销误回滚调式）
 		const sc = savegrid ? (window._scale?.segments || []).map(seg => ({
 			x: seg.startX === -Infinity ? null : Math.round(seg.startX * 4),
@@ -36,7 +36,14 @@ export class Serializer {
 			o: rootlayer.opacity(),
 			sc: sc
 		} : { v: 2, o: rootlayer.opacity() }   // 历史快照也带版本标记，避免反序列化时 hzDiv 回退到 16 / 履歴スナップショットにもバージョンタグを付与、デシリアライズ時のhzDiv後退を防止 / History snapshots also carry version tag to prevent hzDiv fallback to 16
-		const n = rootlayer.children.map(x => this.root2json(x))
+		// x 视图里保存/分享时用进入时的原谱快照，避免把 x 视图编辑写进工程文件
+	let n
+	if (window._barView && window._barViewOrigNotes && !useRootLayer) {
+		try { n = JSON.parse(window._barViewOrigNotes) }
+		catch { n = rootlayer.children.map(x => this.root2json(x)) }
+	} else {
+		n = rootlayer.children.map(x => this.root2json(x))
+	}
 		// 序列化文字注释（通过 window 访问，避免循环依赖）；谱表符号即文字指令，一并存入 x
 		const texts = window._textSel ? [...window._textSel.all].map(t => t.toJSON()) : []
 		const json = JSON.stringify(
@@ -54,8 +61,8 @@ export class Serializer {
 	// Serialize a root note to a JSON object
 	static root2json(note) {
 		return {
-			x: Math.round(note.x() * 4),
-			l: Math.round(note.len * 4),
+			x: Math.round((note._timeX ?? note.x()) * 4),
+			l: Math.round((note._timeLen ?? note.len) * 4),
 			h: Math.round(note.hz * HZ_MUL),
 			m: note.mute,
 			v: note.volume - 50,

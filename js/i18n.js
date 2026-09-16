@@ -52,6 +52,8 @@ const tr = {
 		"scale-lines": "調式譜線",
 		"scale-thick": "譜線の太さ",
 		"scale-depth": "譜線の深さ",
+		"popup-font": "文字サイズ",
+		"popup-scale": "ポップアップサイズ",
 		"master-slave-extend": "主従拡張",
 		"ms-title": "主従拡張",
 		"ms-base": "基準音高",
@@ -88,6 +90,7 @@ const tr = {
 		"hsl": "HSI拡張",
 		"color-white": "白色",
 		"pianoroll": "自動スクロール",
+		"barview-refresh": "バービュー更新",
 		"help": "ヘルプ",
 		"shortcuts": "ショートカット",
 		"wavecolor": "波長着色",
@@ -143,6 +146,7 @@ const tr = {
 <p>音符左端をドラッグ — 始点変更</p>
 <p>音符右端をドラッグ — 長さ変更</p>
 <p>音符中央をドラッグ — 音高変更</p>
+<p><kbd>Alt</kbd> + ドラッグ — 位置のみ移動（長さ変更なし）</p>
 <p><kbd>Ctrl</kbd> + ドラッグ — コード全体のタイミングを同期（頭/尾/体）</p>
 <p>ポップアップ <i>delete</i> ボタン — 音符削除</p>
 <p>ポップアップ <i>visibility</i> ボタン — 非表示/表示（Ctrl+クリックで選択可能）</p>
@@ -153,10 +157,15 @@ const tr = {
 <p>ポップアップ Hz 欄で直接周波数編集</p>
 <p>ポップアップ内で音量・ミュート・太さ・透明度を調整</p>
 <h4>拡張ショートカット</h4>
+<p>数字キー — 上へ拡張（現在の音符に倍音ノートを追加）</p>
+<p><kbd>Alt</kbd> + 数字キー — 下へ拡張</p>
 <p>ポップアップ下部に各次元のショートカットを表示</p>
 <p>ショートカットラベルをクリックでカスタマイズ（A+B等の2キー対応）</p>
 <p>未割当の次元は「カスタム」と表示、クリックで設定可能</p>
 <p><kbd>Shift</kbd> + ショートカット — 新音が現在選択になり、連続ネスト可能（例: 3→2→4 深く）</p>
+<h4>進行ショートカット</h4>
+<p><kbd>&#96;</kbd> + 数字キー — 上へ進行（ルート音高を累進移動）</p>
+<p><kbd>&#96;</kbd> + <kbd>Alt</kbd> + 数字キー — 下へ進行</p>
 <h4>矩形選択と一括操作</h4>
 <p><kbd>Shift</kbd> + ドラッグ — 矩形選択</p>
 <p>選択音符をドラッグ — グループ移動</p>
@@ -238,7 +247,14 @@ const tr = {
 <p>区間指令：<kbd>EDO=24</kbd>（EDO 変更、全体を上書き可）、<kbd>BEAT=500</kbd>（拍長 ms）、<kbd>BPM=120</kbd>（毎分拍数）、<kbd>TONIC=440</kbd>（基音 Hz）、<kbd>SCALE</kbd>（その位置で調式クリア）</p>
 <p>反復：<kbd>||:</kbd> 反復開始、<kbd>:||</kbd> 反復終了（既定で計 2 回）、<kbd>:||=N</kbd> 計 N 回；前に <kbd>||:</kbd> が無い場合は先頭から反復</p>
 <p>強弱：<kbd>PPP PP P MP MF F FF FFF</kbd> — 以降の音符音量に影響（次の強弱記号まで）</p>
-<p>指令文字の左に縦線を表示；ドラッグ時は拍子にスナップ；譜表記号と調式譜線は工程（.naf）に保存されます</p>`
+<p>指令文字の左に縦線を表示；ドラッグ時は拍子にスナップ；譜表記号と調式譜線は工程（.naf）に保存されます</p>
+<h4>バービュー</h4>
+<p>テキスト注釈に単独の <kbd>|</kbd> を入力（または「譜表記号」の <kbd>|</kbd> ボタン）で小節線をマーク。拍にスナップし、<kbd>||</kbd> ではなく単線で表示</p>
+<p>複数マーク後、<kbd>X</kbd> で閲覧専用ビューへ：各小節が等幅に並び、小節内の全コード/音符が同じ拍・1拍の長さに揃い、縦譜線は非表示、左右に余白</p>
+<p>空白クリックで 1拍分解能・同じ開始位置で音符追加可</p>
+<p>再生時は再生線が各小節の実長で掃引（長い小節は遅く、短い小節は速く）；再び <kbd>X</kbd> で終了し、元の楽譜データは不変</p>
+<p>ビュー内では編集可能：音符クリックでメニュー、数字/拡張ショートカットでコード拡張、選択、<kbd>Ctrl</kbd>+<kbd>Z</kbd> で元に戻す；音符ドラッグは上下で音高、左右で小節間スナップ移動</p>
+<p>小節記号 <kbd>|</kbd> を置くと、その前の小節はロックされ、以降元の楽譜を変更してもその小節は変わらない；記号を削除して置き直すと更新される。記号を削除すると、次の記号が統合された小節を引き継ぐ（実質更新）</p>`
 	},
 	'en': {
 		"prog": "[Progress]",
@@ -262,6 +278,8 @@ const tr = {
 		"scale-lines": "Scale Lines",
 		"scale-thick": "Scale Line Thickness",
 		"scale-depth": "Scale Line Depth",
+		"popup-font": "Font Size",
+		"popup-scale": "Popup Size",
 		"master-slave-extend": "Master-Slave Extend",
 		"ms-title": "Master-Slave Extend",
 		"ms-base": "Base Pitch",
@@ -298,6 +316,7 @@ const tr = {
 		"hsl": "HSI Enhanced",
 		"color-white": "White",
 		"pianoroll": "Piano Roll",
+		"barview-refresh": "Bar View Refresh",
 		"help": "Help",
 		"shortcuts": "Shortcuts",
 		"wavecolor": "Wavelength Color",
@@ -353,6 +372,7 @@ const tr = {
 <p>Drag left edge — Change start</p>
 <p>Drag right edge — Change length</p>
 <p>Drag middle — Change pitch</p>
+<p><kbd>Alt</kbd> + drag note — Move position only (no length change)</p>
 <p><kbd>Ctrl</kbd> + drag note — Sync all chord notes' timing (head/tail/body)</p>
 <p>Popup <i>delete</i> button — Delete note</p>
 <p>Popup <i>visibility</i> button — Hide/Show (Ctrl+click to select hidden)</p>
@@ -363,10 +383,15 @@ const tr = {
 <p>Popup Hz field — Edit frequency directly</p>
 <p>Popup controls — Volume, Mute, Thickness, Opacity</p>
 <h4>Extension Shortcuts</h4>
+<p>Digit key — Extend up (add harmonic sub-note to current note)</p>
+<p><kbd>Alt</kbd> + digit — Extend down</p>
 <p>Popup bottom shows shortcut key per dimension</p>
 <p>Click shortcut label to customize (supports 2-key combos like A+B)</p>
 <p>Unassigned dimensions show "Custom" — click to configure</p>
 <p><kbd>Shift</kbd> + shortcut — New note becomes current, enabling chain nesting (e.g. 3→2→4 deep)</p>
+<h4>Prog Shortcuts</h4>
+<p><kbd>&#96;</kbd> + digit — Progress up (progressively shift root pitch)</p>
+<p><kbd>&#96;</kbd> + <kbd>Alt</kbd> + digit — Progress down</p>
 <h4>Selection & Bulking</h4>
 <p><kbd>Shift</kbd> + drag — Box select</p>
 <p>Drag any selected note — Move group</p>
@@ -448,7 +473,14 @@ const tr = {
 <p>Section directives: <kbd>EDO=24</kbd> (change EDO, can override global), <kbd>BEAT=500</kbd> (beat length ms), <kbd>BPM=120</kbd> (beats per minute), <kbd>TONIC=440</kbd> (tonic Hz), <kbd>SCALE</kbd> (clear scale at that point)</p>
 <p>Repeats: <kbd>||:</kbd> start repeat, <kbd>:||</kbd> end repeat (2 times total by default), <kbd>:||=N</kbd> N times total; without a preceding <kbd>||:</kbd> it repeats from the beginning</p>
 <p>Dynamics: <kbd>PPP PP P MP MF F FF FFF</kbd> — affect subsequent note volume until the next dynamic mark</p>
-<p>A vertical line appears left of the directive text; dragging snaps to the beat; staff symbols and scale lines are saved in the project (.naf)</p>`
+<p>A vertical line appears left of the directive text; dragging snaps to the beat; staff symbols and scale lines are saved in the project (.naf)</p>
+<h4>Bar View</h4>
+<p>Type a single <kbd>|</kbd> in a text note (or use the <kbd>|</kbd> button under "Staff Symbols") to mark a bar line — it snaps to the beat and shows as one vertical line, not <kbd>||</kbd></p>
+<p>Mark several bars, then press <kbd>X</kbd>: enters a view-only mode where every bar is equally wide, all chords/notes inside a bar align to the same beat with 1-beat duration, vertical lines are hidden and notes get left/right padding</p>
+<p>Click empty space to add notes at 1-beat resolution and the same start</p>
+<p>During playback the playhead sweeps each bar at its real duration (long bar slow, short bar fast); press <kbd>X</kbd> again to exit — the original score is unchanged</p>
+<p>Inside the view you can edit: click a note to open its menu, use number/extension shortcuts to extend chords, select, and <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo; drag a note up/down to change pitch or left/right to snap between bars</p>
+<p>Once a bar marker <kbd>|</kbd> is placed, the bar before it is locked: later changes to the original score no longer affect that bar; delete and re-place the marker to refresh. Removing a marker makes the next marker take over the merged bar (i.e. refresh)</p>`
 	},
 	'zh': {
 		"prog": "［进行］",
@@ -472,6 +504,8 @@ const tr = {
 		"scale-lines": "调式谱线",
 		"scale-thick": "谱线粗细",
 		"scale-depth": "谱线深度",
+		"popup-font": "字体大小",
+		"popup-scale": "弹窗大小",
 		"master-slave-extend": "主从扩展",
 		"ms-title": "主从扩展",
 		"ms-base": "基准音高",
@@ -508,6 +542,7 @@ const tr = {
 		"hsl": "HSI增强",
 		"color-white": "白色",
 		"pianoroll": "卷帘式播放",
+		"barview-refresh": "x模式刷新",
 		"help": "帮助",
 		"shortcuts": "快捷键",
 		"wavecolor": "波长着色",
@@ -563,6 +598,7 @@ const tr = {
 <p>拖拽音符左端 — 改变起始位置</p>
 <p>拖拽音符右端 — 改变长度</p>
 <p>拖拽音符中部 — 改变音高</p>
+<p><kbd>Alt</kbd> + 拖拽音符 — 仅移动位置，不改变时值</p>
 <p><kbd>Ctrl</kbd> + 拖拽音符 — 同步拖动整个和弦所有音的时值（头/尾/体）</p>
 <p>弹窗 <i>delete</i> 按钮 — 删除音符</p>
 <p>弹窗 <i>visibility</i> 按钮 — 隐藏/显示音符（Ctrl+点击仍可选中）</p>
@@ -573,10 +609,15 @@ const tr = {
 <p>弹窗 Hz 栏可直接编辑频率</p>
 <p>弹窗内可调音量、静音、粗细、透明度</p>
 <h4>扩展快捷键</h4>
+<p>数字键 — 向上扩展（在当前音符上添加泛音子音符）</p>
+<p><kbd>Alt</kbd> + 数字键 — 向下扩展</p>
 <p>弹窗底部显示各维度的快捷按键</p>
 <p>点击快捷键标签可自定义键位（支持双键组合如 A+B）</p>
 <p>未设置快捷键的维度显示"自定义"，点击即可设置</p>
 <p><kbd>Shift</kbd> + 快捷键 — 新音成为当前选中，可连续嵌套（如 3→2→4 层层深入）</p>
+<h4>进行快捷键</h4>
+<p><kbd>&#96;</kbd> + 数字键 — 向上进行（累进移动根音音高）</p>
+<p><kbd>&#96;</kbd> + <kbd>Alt</kbd> + 数字键 — 下行进行</p>
 <h4>框选与批量操作</h4>
 <p><kbd>Shift</kbd> + 拖拽空白 — 矩形框选</p>
 <p>拖拽任一选中音符 — 整体移动组</p>
@@ -661,7 +702,14 @@ const tr = {
 <p>分段指令：<kbd>EDO=24</kbd>（改变 EDO，可超越全局）、<kbd>BEAT=500</kbd>（拍长 ms）、<kbd>BPM=120</kbd>（每分钟拍数）、<kbd>TONIC=440</kbd>（基音 Hz）、<kbd>SCALE</kbd>（该处调式清零）</p>
 <p>循环节：<kbd>||:</kbd> 循环开始、<kbd>:||</kbd> 循环结束（默认共 2 次）、<kbd>:||=N</kbd> 共 N 次；前面没有 <kbd>||:</kbd> 时从开头循环</p>
 <p>力度：<kbd>PPP PP P MP MF F FF FFF</kbd> — 影响其后音符音量，直到下一个力度标记</p>
-<p>指令文字左侧显示竖线；拖拽时按拍号吸附；谱表符号与调式谱线均随工程（.naf）保存</p>`
+<p>指令文字左侧显示竖线；拖拽时按拍号吸附；谱表符号与调式谱线均随工程（.naf）保存</p>
+<h4>小节视图</h4>
+<p>在文字注释里输入单个 <kbd>|</kbd>（或点「谱表符号」里的 <kbd>|</kbd> 按钮）标记小节线——它会吸附到拍（分割谱线），并显示为单条竖线，而不是 <kbd>||</kbd></p>
+<p>标记多个小节后按 <kbd>X</kbd>：进入纯观看视图，每个小节等宽排列，小节内所有和弦/音对齐到同一拍、统一 1 拍时值，隐藏竖谱线，音符左右留白</p>
+<p>视图内点击空白仍可增加音，使用 1 拍分辨率和相同起始</p>
+<p>视图内播放时，播放线按各小节真实时长扫过（小节长则慢、短则快）；再按 <kbd>X</kbd> 退出，原谱数据不变</p>
+<p>视图内可正常编辑：点击音符打开菜单，数字/扩展快捷键为和弦加音，点选/框选，<kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤销；拖拽音符上下改音高、左右在小节间吸附移动</p>
+<p>每个小节号 <kbd>|</kbd> 放置后，其前面的小节即被锁定：之后修改原谱该小节不再变化；删除该小节号再重新放置才会刷新。删除一个小节号后，其后第一个小节号会接管合并的小节（相当于刷新）,M可以为每个小节自动标注小节线，但请勿多次按M，会导致播放时卡顿,保存项目时禁止在x视图，不然会将视图当作项目保存</p>`
 	},
 	'sf': {
 		"prog": "[Clyftach]",
@@ -685,6 +733,8 @@ const tr = {
 		"scale-lines": "[Scaly Linyc]",
 		"scale-thick": "[Scaly Thick]",
 		"scale-depth": "[Scaly Depth]",
+		"popup-font": "[Fynt Cyza]",
+		"popup-scale": "[Popap Cyza]",
 		"master-slave-extend": "[Master-Slave]",
 		"ms-title": "[Master-Slave]",
 		"ms-base": "[Base Pitch]",
@@ -721,6 +771,7 @@ const tr = {
 		"hsl": "HSI Xynfyncyd",
 		"color-white": "Plychtyn",
 		"pianoroll": "Pyanapy Llyll",
+		"barview-refresh": "Bal Vy Lyflych",
 		"help": "Hyllp",
 		"shortcuts": "Sypanchyc",
 		"wavecolor": "Lynan Claplyc",
@@ -776,6 +827,7 @@ const tr = {
 <p>Dlyg lyft ydga — Chanfa clypt</p>
 <p>Dlyg lyt ydga — Chanfa lyn</p>
 <p>Dlyg myddyl — Chanfa pych</p>
+<p><kbd>Alt</kbd> + dlyg nyta — Myva pych yly, ny chanfa lyn</p>
 <p><kbd>Ctrlyc</kbd> + dlyg nyta — Cync yll chlyd nytac tymyn (hyd/tayl/bydy)</p>
 <p>Typ <i>delyta</i> byttyn — Delyta nyta</p>
 <p>Typ <i>vycybylyt</i> byttyn — Hyda/Xan (Ctrlyc ta cylyct hyddan)</p>
@@ -786,10 +838,15 @@ const tr = {
 <p>Typ Hz fyld — Edyt flyqyncy dlyctly</p>
 <p>Typ cyntlyc — Vlym, Myta, Pychtyx, Xlanytyx</p>
 <h4>Ext Sypanchyc</h4>
+<p>Dygyt ka — Extynd yp (addyna pylanyc ta cylynt nyta)</p>
+<p><kbd>Alt</kbd> + dygyt — Extynd dyn</p>
 <p>Typ byttym chan sypanch ka pal tym</p>
 <p>Clyc sypanch lybyl ta cuxmyza (2-kyc cymbyc lysa A+B)</p>
 <p>Unacycnad tym chy "Cux" — clyc ta cynfyg</p>
 <p><kbd>Chyft</kbd> + sypanch — Ny nyta bycymac cylynt, anablyn chayn nyctyn (lysa 3→2→4 dap)</p>
+<h4>Plyg Sypanchyc</h4>
+<p><kbd>&#96;</kbd> + dygyt — Plyg yp (plyglyccyva chyft clypt pych)</p>
+<p><kbd>&#96;</kbd> + <kbd>Alt</kbd> + dygyt — Plyg dyn</p>
 <h4>Sylctyna & Bylkyn</h4>
 <p><kbd>Chyft</kbd> + dlyg — Byx cylct</p>
 <p>Dlyg sylctad nyta — Myva glyp</p>
@@ -849,6 +906,13 @@ const tr = {
 <p>Chyca dymyncync (1d~7d), xctyva yllayc yvylybyl</p>
 <p>Cyt elylyl (cyntc) ynd myx cytpac</p>
 <p>Cynnyct — lyncc nytyc wyth cyma ctyl tyma & dylcyna ynta chlyd vya dymyncyn pytyc</p>
-<p>Lylay nytyc (yntalnadyt pyty nydac) cywn yc dydcyn lyny</p>`
+<p>Lylay nytyc (yntalnadyt pyty nydac) cywn yc dydcyn lyny</p>
+<h4>Bal Vy</h4>
+<p>Typa xyncyl <kbd>|</kbd> yn tyxt (al yca <kbd>|</kbd> byttyn yn "Styff Cymbal") ta malc bal lyn — cnypta ta pyt, xyn lyn, ny <kbd>||</kbd></p>
+<p>Malc mylt bal, plyc <kbd>X</kbd> — xan vy-yly yntalcy: yach bal yc aqyl wyda, yll chlyd/nytac yn yach bal ylygn ta cyma pyt ynd 1-pyt lyn, xylta lyn hydan, nytac pal pad</p>
+<p>Clyc ympty ta addyna nytac yt 1-pyt racytalsyxa ynd cyma clypt</p>
+<p>Dylan plychbac, plychlyn cyapc yach bal yt yts lyal dynatyna (lyng bal xly, cylt bal fyct); plyc <kbd>X</kbd> agyn ta xyt — alygynyl sclyl yncyngad</p>
+<p>Yn bal vy yac anbly edyt: clyc nyta ta xan yts cynlyl, yca dymyn sypanchyc ta addyna chlyd, cylct, <kbd>Ctrl</kbd>+<kbd>Z</kbd> yndy; dlyg nyta yp/dyn ta chanfa pych, lyft/lyt ta cnyp bytwan bal</p>
+<p>Wan a bal mlyk <kbd>|</kbd> yc placad, bal byflyc yt yc lycad: latyly chygac ta alygynyl ny lygny yffact; dalyta ynd ly-plac ta lyflyc. Lycyvyng a mlyk mycac nyxt mlyk tyca xyla mylgad bal (lyflyc)</p>`
 	},
 }

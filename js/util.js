@@ -97,3 +97,7 @@ export const qt = (x, tick) => {
 // 全局时间偏移（防止负Ticks） / グローバル時間オフセット（負Ticks防止） / Global time offset (prevents negative Ticks)
 export const OFFSET = 192000
 
+// 小节视图（Bar View）布局常量 / バービューのレイアウト定数 / Bar view layout constants
+export const BAR_VIEW_SLOT = 96   // 每小节等宽槽位（像素）
+export const BAR_VIEW_PAD = 24    // 小节内音符左右留白（像素）
+

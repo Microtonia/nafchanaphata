@@ -189,7 +189,7 @@ export class TextNote {
 		this.konva.on('dragmove', e => {
 			// 谱表符号（指令文字）拖拽时按拍号吸附；拍号（BEAT=1/N）符号固定按 1/1 吸附，避免错位
 			if (this._staffDirective && !TextSel._groupRef) {
-				const tick = this._staffDirective.type === 'timesig' ? 1 : undefined
+				const tick = (this._staffDirective.type === 'timesig' || this._staffDirective.type === 'bar') ? 1 : undefined
 				this.konva.x(qh(this.konva.x(), tick))
 			}
 			if (TextSel._groupRef) {
@@ -283,12 +283,15 @@ export class TextNote {
 			x: this.konva.x(), y: this.konva.y(),
 			text: this.text, htmlText: this.htmlText,
 			fill: this.fill,
-			fontSize: this.fontSize, fontFamily: this.fontFamily
+			fontSize: this.fontSize, fontFamily: this.fontFamily,
+			snapshot: this._barSnapshot
 		}
 	}
 
 	static fromJSON(j) {
-		return new TextNote(j.text, j.x, j.y, j)
+		const t = new TextNote(j.text, j.x, j.y, j)
+		if (j.snapshot) t._barSnapshot = j.snapshot
+		return t
 	}
 }
 
@@ -365,6 +368,7 @@ export const TextSel = {
 		this.selected.clear()
 		for (const j of this.clipboard) {
 			const t = TextNote.fromJSON(j)
+			t._barSnapshot = null
 			t.konva.position({ x: j.x + 30, y: j.y + 30 })
 			t.syncHtmlPosition()
 			textlayer.add(t.konva)

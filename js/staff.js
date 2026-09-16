@@ -23,6 +23,7 @@ const STAFF_COLORS = {
 	scale: '#b598ee',
 	loopstart: '#f27992',
 	loopend: '#f27992',
+	bar: '#ffffff',
 	velocity: '#ed9877'
 }
 
@@ -42,6 +43,7 @@ const STAFF_BUTTONS = [
 	{ label: 'SCALE',     text: 'SCALE',     hint: '调式清零' },
 	{ label: '||:',       text: '||:',       hint: '循环节开始' },
 	{ label: ':||',       text: ':||',       hint: '循环节结束（可=次数）' },
+	{ label: '|',         text: '|',         hint: '小节线（标记小节）' },
 	{ label: 'PPP',       text: 'PPP',       hint: '力度 ppp' },
 	{ label: 'PP',        text: 'PP',        hint: '力度 pp' },
 	{ label: 'P',         text: 'P',         hint: '力度 p' },
@@ -63,6 +65,7 @@ function matchDirective(raw) {
 	if ((m = s.match(/^BPM=(\d+(?:\.\d+)?)$/))) return { type: 'bpm', value: parseFloat(m[1]) }
 	if ((m = s.match(/^TONIC=(\d+(?:\.\d+)?)$/))) return { type: 'tonic', value: parseFloat(m[1]) }
 	if (s === 'SCALE') return { type: 'scale' }
+	if (s === '|') return { type: 'bar' }
 	if (s === '||:') return { type: 'loopstart' }
 	if ((m = s.match(/^:\|\|(?:=(\d+))?$/))) {
 		// :||=N 表示「一共播放 N 次」；:||（无数字）默认一共 2 次
@@ -74,7 +77,7 @@ function matchDirective(raw) {
 }
 
 // 指令 token 的全局匹配（按最长的力度标记优先，避免 P 误吞 PP）
-const TOKEN_REGEX = /EDO=\d+|DURATION=\d+(?:\.\d+)?|BEAT=1\/\d+|BPM=\d+(?:\.\d+)?|TONIC=\d+(?:\.\d+)?|:\|\|(?:=\d+)?|\|\|:|SCALE|PPP|FFF|PP|FF|MP|MF|P|F/g
+const TOKEN_REGEX = /EDO=\d+|DURATION=\d+(?:\.\d+)?|BEAT=1\/\d+|BPM=\d+(?:\.\d+)?|TONIC=\d+(?:\.\d+)?|:\|\|(?:=\d+)?|\|\|:|\||SCALE|PPP|FFF|PP|FF|MP|MF|P|F/g
 
 // 解析多段文本：直接匹配所有指令 token（不依赖空白分隔），支持一个文字包含多个谱表符号
 function matchDirectives(raw) {
@@ -115,10 +118,12 @@ function applyMark(t, d) {
 	if (!t.html) return
 	if (d) {
 		t.html.style.borderLeft = '2px solid ' + (STAFF_COLORS[d.type] || '#ffc247')
-		t.html.style.paddingLeft = '5px'
+		t.html.style.paddingLeft = (d.type === 'bar') ? '0px' : '5px'
+		t.html.style.color = (d.type === 'bar') ? 'transparent' : (t.fill || '#ffffff')
 	} else {
 		t.html.style.borderLeft = 'none'
 		t.html.style.paddingLeft = '0'
+		t.html.style.color = t.fill || '#ffffff'
 	}
 }
 
@@ -201,17 +206,10 @@ function pairLoops() {
 	return loops
 }
 
-// 构建全局播放（含力度），替代每个 root 的 Tone.Part；循环反复由 seek 跳回实现
-function buildPlayback() {
-	// 清除旧的全局 Part 和所有 per-root Part
-	if (window._playbackPart) { window._playbackPart.dispose(); window._playbackPart = null }
-	for (const root of rootlayer.getChildren()) {
-		if (root._part) { root._part.dispose(); root._part = null }
-	}
-
-	// 收集所有音符（绝对 ticks，不展开）
+// 收集音符播放数据（不构建 Part）：startTick/lenTick/hz/vol/absX
+function collectPlaybackNotes(roots) {
 	const notes = []
-	for (const root of rootlayer.getChildren()) {
+	for (const root of roots) {
 		const head = root.noteHead
 		for (const n of root.notes) {
 			notes.push({
@@ -224,6 +222,22 @@ function buildPlayback() {
 		}
 	}
 	notes.sort((a, b) => a.startTick - b.startTick)
+	return notes
+}
+window._collectPlaybackNotes = collectPlaybackNotes
+
+// 构建全局播放（含力度），替代每个 root 的 Tone.Part；循环反复由 seek 跳回实现
+function buildPlayback() {
+	// 清除旧的全局 Part 和所有 per-root Part
+	if (window._playbackPart) { window._playbackPart.dispose(); window._playbackPart = null }
+	for (const root of rootlayer.getChildren()) {
+		if (root._part) { root._part.dispose(); root._part = null }
+	}
+
+	// 收集音符（x 视图时用进入时预收集的原谱播放数据，保证播放不受 x 视图编辑影响）
+	const notes = (window._barView && window._barViewOrigPlaybackData)
+		? window._barViewOrigPlaybackData
+		: collectPlaybackNotes(rootlayer.getChildren())
 
 	const data = notes.map(n => ({
 		time: n.startTick + 'i',

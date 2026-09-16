@@ -4,7 +4,7 @@
  * Note module: defines Note, RootNote, SubNote classes managing pitch lines, chord trees, drag interaction and color mapping
  */
 
-import { hz2y, y2hz, x2t, f2d, qb, qs, qh, qt, tav, pitchIntervals, $, $$, OFFSET } from './util.js';
+import { hz2y, y2hz, x2t, f2d, qb, qs, qh, qt, tav, pitchIntervals, $, $$, OFFSET, BAR_VIEW_PAD } from './util.js';
 import { playNotes, sampler } from './sound.js';
 import history from './history.js'
 
@@ -101,6 +101,33 @@ function hzToRgbString(hz) {
 // Note 基类：所有音符的公共抽象，包含音高线、子音符树、播放/静音/隐藏等核心功能
 // Note 基底クラス：すべての音符の共通抽象、ピッチライン、子音符ツリー、再生/ミュート/非表示などのコア機能を含む
 // Note base class: common abstraction for all notes, includes pitch line, child note tree, play/mute/hide core functionality
+// 小节视图：把 x 吸附到最近的小节槽位（音符对齐）
+function _barViewSnapX(x) {
+	const bars = window._barViewData?.bars
+	if (!bars || !bars.length) return x
+	let bi = 0, best = Infinity
+	for (let i = 0; i < bars.length; i++) {
+		const d = Math.abs(x - (bars[i].vStart + BAR_VIEW_PAD))
+		if (d < best) { best = d; bi = i }
+	}
+	return bars[bi].vStart + BAR_VIEW_PAD
+}
+// 小节视图：返回 x 所在的小节对象
+function _barViewBarOfX(x) {
+	const bars = window._barViewData?.bars
+	if (!bars || !bars.length) return null
+	let bi = 0, best = Infinity
+	for (let i = 0; i < bars.length; i++) {
+		const d = Math.abs(x - (bars[i].vStart + BAR_VIEW_PAD))
+		if (d < best) { best = d; bi = i }
+	}
+	return bars[bi]
+}
+// 小节视图：更新根音音高后递归同步子音（重算子音频率与相对位置，避免快照中子音频率与根音脱节）
+function _syncSubNotes(root) {
+	for (const s of root.childNotes.children) s.quantize()
+}
+
 export class Note extends Konva.Group {
 	constructor(stage, opt, len, delay = null, interval = null, tick = null) {
 		super(opt)
@@ -120,6 +147,8 @@ export class Note extends Konva.Group {
 		this.volume = 50
 		this.isMuted = false
 		this._hidden = false
+		this._timeX = null   // 小节视图：时间轴原始 X（视觉重排时保留真实时序）
+		this._timeLen = null // 小节视图：原始时值（像素）
 
 		// 每音独立的外观属性（从全局滑块读取默认值）
 		// 音符ごとの独立した外観属性（グローバルスライダーからデフォルト値を読み取り）
@@ -141,8 +170,8 @@ export class Note extends Konva.Group {
 				return
 			}
 			this.stage.current = this
-			// 非卷帘模式：点击音符也移动播放线
-			if (!$('#config-pianoroll')?.checked) {
+			// 非卷帘模式：点击音符也移动播放线（小节视图内不 seek，避免错位）
+			if (!window._barView && !$('#config-pianoroll')?.checked) {
 				Tone.Transport.ticks = x2t(this.root.x()) + OFFSET
 			}
 			$(`#${this.type}hz`).innerText = (this._hz || this.hz).toFixed(1)
@@ -271,13 +300,15 @@ export class Note extends Konva.Group {
 	}
 	// 音符数据对象：供 Tone.js 播放使用 // 音符データオブジェクト：Tone.js 再生用 // Note data object: for Tone.js playback
 	get note() {
-		const absX = (this.root ? this.root.x() : this.x()) + (this.delay || 0)
+		const timeX = this.root._timeX ?? this.root.x()
+		const absX = timeX + (this.delay || 0)
+		const timeLen = this._timeLen ?? this.len
 		return {
 			time: x2t(this.delay) + "i",
 			_time: x2t(this.delay),
 			hz: this._hz || this.hz,
-			len: x2t(this.len) + "i",
-			_len: x2t(this.len),
+			len: x2t(timeLen) + "i",
+			_len: x2t(timeLen),
 			vol: this.volume/100,
 			absX: absX
 		}
@@ -286,7 +317,7 @@ export class Note extends Konva.Group {
 		return this.childNotes.getChildren().map(x => x.notes).flat().concat(this.mute ? [] : this.note)
 	}
 	get noteHead() {
-		return x2t(this.x()) + OFFSET
+		return x2t(this._timeX ?? this.x()) + OFFSET
 	}
 	get startTime() {
 		return Math.min(...this.notes.map(x => this.noteHead + x._time))
@@ -351,14 +382,30 @@ export class RootNote extends Note {
 		// ドラッグ開始ハンドラ：初期状態を記録、ドラッグモード（先頭/末尾/全体）を検出、選択グループのドラッグを開始
 		// Drag start handler: record initial state, detect drag mode (head/tail/body), start selection group drag
 		this.on('dragstart', e => {
+			// 小节视图：只做上下音高 / 小节间吸附移动
+			if (window._barView) {
+				history.snapshot()
+				this.stage.dragMode = 'barview'
+				this.stage.isNoteDragging = true
+				if (window._sel?.selected?.size > 1 && window._sel.selected.has(this)) {
+					window._sel._startGroupDrag()
+				}
+				return
+			}
 			history.snapshot()
-			const offsetX = this.getRelativePointerPosition().x
-			if (offsetX <= 10 && offsetX <= this.len / 3) {
-				this.stage.dragMode = 'head'
-			} else if (offsetX >= this.len - 10 && offsetX >= 2 * this.len / 3) {
-				this.stage.dragMode = 'tail'
-			} else {
+			// Alt 长按：仅拖动位置（强制 body 模式，不改变时值）
+			const altDrag = e.evt.altKey
+			if (altDrag) {
 				this.stage.dragMode = 'body'
+			} else {
+				const offsetX = this.getRelativePointerPosition().x
+				if (offsetX <= 10 && offsetX <= this.len / 3) {
+					this.stage.dragMode = 'head'
+				} else if (offsetX >= this.len - 10 && offsetX >= 2 * this.len / 3) {
+					this.stage.dragMode = 'tail'
+				} else {
+					this.stage.dragMode = 'body'
+				}
 			}
 			this.origX = this.x()
 			this.origY = this.y()
@@ -378,8 +425,8 @@ export class RootNote extends Note {
 			if (window._textSel?.selected?.size > 0) {
 				window._textSel._startGroupDrag()
 			}
-			// Ctrl+拖拽：记录整个和弦树状态
-			this._ctrlChordDrag = e.evt.ctrlKey
+			// Ctrl+拖拽：记录整个和弦树状态（Alt 长按优先，忽略 Ctrl）
+			this._ctrlChordDrag = e.evt.ctrlKey && !altDrag
 			if (this._ctrlChordDrag) {
 				this._ctrlSubs = this.root.getDescendants().slice(1).map(n => ({
 					note: n, origLen: n.len, origDelay: n.delay || 0
@@ -390,6 +437,34 @@ export class RootNote extends Note {
 		// ドラッグ移動ハンドラ：モードに応じて位置/長さをリアルタイム更新、Ctrl コード連動と Shift チェーンをサポート
 		// Drag move handler: update position/length in real time per mode, supports Ctrl chord sync and Shift chaining
 		.on('dragmove', e => {
+			// 小节视图：垂直音高量化 + 水平吸附到最近小节槽位
+			if (window._barView) {
+				const st = window._getStaffState ? window._getStaffState(this._timeX ?? this.x()) : null
+				this._hz = qb(y2hz(this.y()), st?.tonic, st?.edo)
+				this.y(hz2y(this._hz))
+				this.updateColor()
+				_syncSubNotes(this)
+				this.x(_barViewSnapX(this.x()))
+				if (window._sel?._groupRef) {
+					const ref = window._sel._groupRef.get(this)
+					if (ref) {
+						const dx = this.x() - ref.x
+						const dy = this.y() - ref.y
+						for (const [n, r] of window._sel._groupRef) {
+							if (n === this) continue
+							n.x(r.x + dx)
+							n.y(r.y + dy)
+							const nst = window._getStaffState ? window._getStaffState(n._timeX ?? n.x()) : null
+							n._hz = qb(y2hz(n.y()), nst?.tonic, nst?.edo)
+							n.y(hz2y(n._hz))
+							n.updateColor()
+							_syncSubNotes(n)
+							n.x(_barViewSnapX(n.x()))
+						}
+					}
+				}
+				return
+			}
 			// 拍号（BEAT=1/N）符号后的分段时间分辨率
 			const stTick = window._getStaffState ? window._getStaffState(this.x())?.tick : undefined
 			switch (this.stage.dragMode) {
@@ -451,6 +526,35 @@ export class RootNote extends Note {
 		// ドラッグ終了ハンドラ：Hz を更新、再生 Part を再構築、選択グループドラッグを終了
 		// Drag end handler: update Hz, rebuild playback Part, end selection group drag
 		.on('dragend', e => {
+			// 小节视图：结束拖拽，更新音高并落到目标小节起点
+			if (window._barView) {
+				this.stage.isNoteDragging = false
+				const st = window._getStaffState ? window._getStaffState(this._timeX ?? this.x()) : null
+				this._hz = qb(y2hz(this.y()), st?.tonic, st?.edo)
+				this.y(hz2y(this._hz))
+				this.updateColor()
+				_syncSubNotes(this)
+				this.x(_barViewSnapX(this.x()))
+				const bar = _barViewBarOfX(this.x())
+				if (bar) { this._timeX = bar.oStart; this._timeLen = 48 }
+				if (window._sel?._groupRef) {
+					for (const [n] of window._sel._groupRef) {
+						if (n === this) continue
+						n.x(_barViewSnapX(n.x()))
+						const nb = _barViewBarOfX(n.x())
+						if (nb) { n._timeX = nb.oStart; n._timeLen = 48 }
+						const nst = window._getStaffState ? window._getStaffState(n._timeX ?? n.x()) : null
+						n._hz = qb(y2hz(n.y()), nst?.tonic, nst?.edo)
+						n.y(hz2y(n._hz))
+						n.updateColor()
+						_syncSubNotes(n)
+						n.buildPart()
+					}
+					window._sel._groupRef = null
+				}
+				this.root.buildPart()
+				return
+			}
 			this.stage.isNoteDragging = false
 			this.hz = y2hz(this.y())
 			this.root.buildPart()
@@ -555,15 +659,9 @@ export class RootNote extends Note {
 		return this._interval
 	}
 	set interval(i) {
-		const prevNotes = this.parent.getChildren(n => n.x() < this.x())
-		if (prevNotes.length == 0) {
-			if (i.n !== 1 || i.d !== 1) this.hz = this.hz / (this.interval?.n / this.interval?.d || 1) * i.n / i.d
-			this._interval = null
-		} else {
-			const prev = prevNotes.reduce((a, c) => a.x() > c.x() ? a : c)
-			this.hz = prev.hz * i.n / i.d
-			this._interval = i
-		}
+		// 根音是绝对音高：进行(Prog)按自身频率累进移位，不依赖其他根音
+		if (i.n !== 1 || i.d !== 1) this.hz = this.hz * i.n / i.d
+		this._interval = null
 		this.quantize()
 	}
 	// 锚定：记录当前位置用于 Shift 连锁 // アンカー：Shift チェーン用に現在位置を記録 // Anchor: record current position for Shift chaining
@@ -628,13 +726,19 @@ export class SubNote extends Note {
 		this.pitchline.on('dragstart', e => {
 			e.cancelBubble = true
 			history.snapshot()
-			const offsetX = this.pitchline.getRelativePointerPosition().x
-			if (offsetX <= 10 && offsetX <= this.len / 3) {
-				this.stage.dragMode = 'head'
-			} else if (offsetX >= this.len - 10 && offsetX >= this.len * 2 / 3) {
-				this.stage.dragMode = 'tail'
-			} else {
+			// Alt 长按：仅拖动位置（强制 body 模式，不改变时值）
+			const altDrag = e.evt.altKey
+			if (altDrag) {
 				this.stage.dragMode = 'body'
+			} else {
+				const offsetX = this.pitchline.getRelativePointerPosition().x
+				if (offsetX <= 10 && offsetX <= this.len / 3) {
+					this.stage.dragMode = 'head'
+				} else if (offsetX >= this.len - 10 && offsetX >= this.len * 2 / 3) {
+					this.stage.dragMode = 'tail'
+				} else {
+					this.stage.dragMode = 'body'
+				}
 			}
 			this.origX = this.pitchline.x()
 			this.origY = this.pitchline.y()
@@ -649,8 +753,8 @@ export class SubNote extends Note {
 			if (window._textSel?.selected?.size > 0) {
 				window._textSel._startGroupDrag()
 			}
-			// Ctrl+拖拽子音：重定向到根音，记录整个和弦树状态
-			this._ctrlChordDrag = e.evt.ctrlKey
+			// Ctrl+拖拽子音：重定向到根音，记录整个和弦树状态（Alt 长按优先，忽略 Ctrl）
+			this._ctrlChordDrag = e.evt.ctrlKey && !altDrag
 			if (this._ctrlChordDrag) {
 				this._ctrlStartPtrX = this.stage.getRelativePointerPosition().x
 				this._ctrlOrigRootX = this.root.x()
@@ -814,14 +918,14 @@ export class SubNote extends Note {
 	}
 	set hz(v) {
 		this._hz = v
-		this.y(hz2y(this._hz) - this.parentNote.getAbsolutePosition(this.stage).y)
+		this.y(hz2y(this._hz) - hz2y(this.parentNote.hz))
 		this.root._needsBuild = true
 		this.updateColor()
 	}
 	// 子音符量化：四舍五入到最近的允许频率 // 子音符量子化：最も近い許可周波数に四捨五入 // Child note quantization: round to nearest allowed frequency
 	quantize() {
 		this._hz = qs(this.hz)
-		this.y(hz2y(this._hz) - this.parentNote.getAbsolutePosition(this.stage).y)
+		this.y(hz2y(this._hz) - hz2y(this.parentNote.hz))
 		for (const n of this.childNotes.children) n.quantize()
 		this.updateColor()
 	}
@@ -926,8 +1030,8 @@ export class SubNote extends Note {
 		const newNoteOpacity = this._noteOpacity
 		const newTick = this._tick
 
-		// 从旧根沿路径累加 delay，得到提升音符的内容 X
-		let contentX = oldRoot.x()
+		// 从旧根沿路径累加 delay，得到提升音符的内容 X（x 视图用时间坐标）
+		let contentX = oldRoot._timeX ?? oldRoot.x()
 		const delaysToPromoted = []
 		let w = this
 		while (w !== oldRoot) {
@@ -948,7 +1052,7 @@ export class SubNote extends Note {
 
 		// 3. 保存整个树的结构（全部用内容坐标，不含 stage 平移）
 		const promoted = this
-		const rootAbsX = oldRoot.x()
+		const rootAbsX = oldRoot._timeX ?? oldRoot.x()
 		function saveTree(note, parentAbsDelay) {
 			const myAbsDelay = parentAbsDelay + (note.delay || 0)
 			return {
@@ -985,6 +1089,10 @@ export class SubNote extends Note {
 		newRoot._linkOpacity = newLinkOpacity
 		newRoot._noteOpacity = newNoteOpacity
 		newRoot._tick = newTick
+		if (window._barView) {
+			newRoot._timeX = contentX
+			newRoot._timeLen = newLen
+		}
 		newRoot.pitchline.strokeWidth(newPitchThick)
 		newRoot.pitchline.opacity(newNoteOpacity)
 		if (newRoot.mark) newRoot.mark.opacity(newNoteOpacity)

@@ -74,7 +74,7 @@ function downloadBlob(blob, filename) {
 function collectAllNotes(rootlayer) {
 	const result = []
 	for (const root of rootlayer.getChildren()) {
-		const rootStart = x2t(root.x())
+		const rootStart = x2t(root._timeX ?? root.x())
 		flattenNotes(root, rootStart, result)
 	}
 	result.sort((a, b) => a.absStart - b.absStart)

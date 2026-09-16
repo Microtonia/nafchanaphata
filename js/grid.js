@@ -44,21 +44,22 @@ export class Grid extends Konva.Layer {
 		// 动画帧：每帧更新播放指示线位置 / アニメーションフレーム：毎フレーム再生インジケーター位置を更新 / Animation frame: update playback indicator position each frame
 		this.anim = new Konva.Animation(frame => {
 			const transportX = t2x(Tone.Transport.ticks - OFFSET)
+			const contentX = (window._barView && window._barViewX) ? window._barViewX(Tone.Transport.ticks) : transportX
 			const sx = this.stage.scaleX()
 			const sy = this.stage.scaleY()
 			const playing = Tone.Transport.state === 'started'
 			if (this._pianoRoll) {
 				const FIXED_X = window.innerWidth * 0.25
 				if (playing) {
-					// 播放中：自动滚屏跟随transport（含用户手动偏移），用户拖动时不覆盖
+					// 播放中：自动滚屏跟随内容位置（含用户手动偏移），用户拖动时不覆盖
 					if (!this._isUserDragging) {
-						this.stage.x(FIXED_X - (transportX + this._pianoRollOffset) * sx)
+						this.stage.x(FIXED_X - (contentX + this._pianoRollOffset) * sx)
 					}
 				}
 				// 始终固定在FIXED_X屏幕位置：播放/暂停/拖动都不变
 				this.indicator.x((FIXED_X - this.stage.x()) / sx)
 			} else {
-				this.indicator.x(transportX)
+				this.indicator.x(contentX)
 			}
 			this.indicator.y(-this.stage.y() / sy)
 			this.indicator.points([0, 0, 0, window.innerHeight / sy])
@@ -134,12 +135,12 @@ export class Grid extends Konva.Layer {
 		})
 		stage.on('dragmove.pianoroll', e => {
 			if (this._pianoRoll && this._isUserDragging) {
-				const transportX = t2x(Tone.Transport.ticks - OFFSET)
+				const contentX = (window._barView && window._barViewX) ? window._barViewX(Tone.Transport.ticks) : t2x(Tone.Transport.ticks - OFFSET)
 				const FIXED_X = window.innerWidth * 0.25
 				const sx = this.stage.scaleX()
 				// stage.x = FIXED_X - (transportX + offset) * sx
 				// → offset = (FIXED_X - stage.x()) / sx - transportX
-				this._pianoRollOffset = (FIXED_X - this.stage.x()) / sx - transportX
+				this._pianoRollOffset = (FIXED_X - this.stage.x()) / sx - contentX
 				this.adjust()
 			}
 		})
@@ -510,8 +511,8 @@ export class Grid extends Konva.Layer {
 
 		let minX = Infinity, maxX = -Infinity
 		for (const note of children) {
-			const x = note.x()
-			const len = note.len || 48
+			const x = note._timeX ?? note.x()
+			const len = note._timeLen ?? (note.len || 48)
 			if (x < minX) minX = x
 			if (x + len > maxX) maxX = x + len
 		}

@@ -25,7 +25,7 @@ class History {
 	}
 	// 保存当前工程快照（纯 JSON，跳过压缩以避免重复存储） // 現在のプロジェクトスナップショットを保存（純粋JSON、圧縮スキップで重複保存を回避） // Save current project snapshot (pure JSON, skip compression to avoid duplicate storage)
 	snapshot() {
-		const d = Serializer.serialize(false, false)  // 纯 JSON，跳过压缩以提升大工程性能 // 純粋JSON、圧縮をスキップして大規模プロジェクトのパフォーマンスを向上 // Pure JSON, skip compression for better performance on large projects
+		const d = Serializer.serialize(false, false, true)  // 历史快照：强制序列化当前 rootlayer（含 x 视图音符），而非进入视图时的原谱 // 履歴スナップショット：現在のrootlayer（ビュー音符含む）を強制シリアライズ
 		if (this.history.at(-1) == d) return
 		this.history.push(d)
 		if (this.history.length > 100) this.history.shift()
@@ -45,6 +45,7 @@ class History {
 		stage.current = null
 		Tone.Transport.cancel()
 		Serializer.deserialize(this.history.pop())
+		if (window._barView) window._relayoutBarView?.()
 		// 恢复 stage.current // stage.current を復元 // Restore stage.current
 		if (!isNaN(curX)) {
 			for (const n of rootlayer.getChildren()) {

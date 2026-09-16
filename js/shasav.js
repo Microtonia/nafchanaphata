@@ -4,17 +4,19 @@
  * Main application module: initialization, keyboard bindings, Config panel, custom dimension system, ext shortcuts, import/export and zoom control
  */
 
-import { $, $$, pitchIntervals, x2t, hz2y, f2d, OFFSET } from './util.js';
+import { $, $$, pitchIntervals, x2t, t2x, hz2y, f2d, OFFSET, BAR_VIEW_SLOT, BAR_VIEW_PAD } from './util.js';
 import { Serializer } from './serialize.js';
 import history from './history.js';
 import { switchTones } from './sound.js';
 import { stage, grid, rootlayer } from './sequencer.js';
+import { RootNote } from './note.js';
 import { i18n, t } from './i18n.js';
 import { bindKeys } from './keybinds.js';
 import { exportMidi, exportMidi12TET, exportMidiMicrotonal, exportMidiCustomEDO, exportWav, importMidi, importMidiMicrotonal } from './midi.js';
 import { Select } from './selection.js';
 import './text.js';  // 文字注释模块（自包含初始化）
 import './staff.js';  // 谱表符号模块（自包含初始化）
+import './video.js';  // 视频录制模块（自包含初始化）
 
 // 初始化键盘绑定和选区模块 // キーバインドと選択モジュールを初期化 // Initialize keyboard bindings and selection module
 bindKeys()
@@ -125,6 +127,25 @@ $('#config-edo-lines').addEventListener('change', function(e) {
 $('#config-edo').addEventListener('change', function(e) {
 	grid.drawEdoLines()
 })
+
+// 弹窗字体大小 / 弹窗整体缩放 // ポップアップ文字サイズ / ポップアップ全体ズーム // Popup font size / popup scale
+function applyPopupSize() {
+	const font = localStorage.getItem('naf_popup_font') || '13'
+	const scale = localStorage.getItem('naf_popup_scale') || '85'
+	document.documentElement.style.setProperty('--popup-font', font + 'px')
+	document.documentElement.style.setProperty('--popup-scale', String(parseFloat(scale) / 100))
+	$('#config-popup-font').value = font
+	$('#config-popup-scale').value = scale
+}
+$('#config-popup-font').addEventListener('input', function(e) {
+	document.documentElement.style.setProperty('--popup-font', e.target.value + 'px')
+	localStorage.setItem('naf_popup_font', e.target.value)
+})
+$('#config-popup-scale').addEventListener('input', function(e) {
+	document.documentElement.style.setProperty('--popup-scale', String(parseFloat(e.target.value) / 100))
+	localStorage.setItem('naf_popup_scale', e.target.value)
+})
+applyPopupSize()
 
 // === 调式（scale）系统：选中和弦的音作为调式内音 ===
 // === 調式システム：選択した和音の音を調式内音とする ===
@@ -721,7 +742,11 @@ $('#play-pause-btn').addEventListener('click', e => {
 			// 卷帘模式：暂停后用户可能拖动了画面，需根据播放线屏幕位置重算
 			if (grid._pianoRoll) {
 				const contentX = grid.getIndicatorContentX()
-				Tone.Transport.ticks = x2t(contentX) + OFFSET
+				if (window._barView && window._barViewTicks) {
+					Tone.Transport.ticks = window._barViewTicks(contentX)
+				} else {
+					Tone.Transport.ticks = x2t(contentX) + OFFSET
+				}
 				grid.resetPianoRollOffset()
 			}
 			// 非卷帘模式：Tone.Transport.ticks 已通过点击 seek 正确设置，不动它
@@ -934,6 +959,7 @@ $('#promote').addEventListener('click', e => {
 		if (newRoot) {
 			stage.current = newRoot
 			grid.autoLoop()
+			if (window._barView) window._relayoutBarView?.()
 		}
 	}
 	$('#overlay').style.visibility = ''
@@ -1670,8 +1696,8 @@ function rebuildCustomDimUI() {
 			btn.style.setProperty('overflow', 'visible', 'important')
 			btn.style.setProperty('white-space', 'nowrap', 'important')
 			btn.title = label
-			const dirCheck = nav.querySelector('label.checkbox')
-			if (dirCheck) nav.insertBefore(btn, dirCheck)
+			const grid = nav.querySelector('.dim-buttons')
+			if (grid) grid.appendChild(btn)
 			else nav.appendChild(btn)
 		}
 
@@ -2139,8 +2165,33 @@ function buildShortcutMap() {
 	return map
 }
 let _extMap = {}
-function rebuildExtMap() { _extMap = buildShortcutMap() }
+let _progMap = {}
+// 进行(Prog)快捷键：` + 扩展快捷键 = 向上进行，Alt + ` + 扩展快捷键 = 下行进行
+// 進行(Prog)ショートカット：` + 拡張ショートカット = 上へ進行、Alt + ` + 拡張ショートカット = 下へ進行
+// Prog shortcut: ` + ext shortcut = progress up, Alt + ` + ext shortcut = progress down
+function buildProgMap() {
+	const map = {}
+	for (const dimKey in extShortcuts) {
+		const up = extShortcuts[dimKey]?.up
+		if (!up) continue
+		map['Backquote+' + up] = { dimKey, alt: false }
+		map['Alt+Backquote+' + up] = { dimKey, alt: true }
+	}
+	return map
+}
+function rebuildExtMap() {
+	_extMap = buildShortcutMap()
+	_progMap = buildProgMap()
+}
 rebuildExtMap()
+
+// 进行快捷键修饰键：反引号 ` 按下时进入“进行”模式
+// 進行ショートカット修飾キー：バッククォート ` 押下で「進行」モードへ
+// Prog modifier key: backquote ` held to enter prog mode
+let _progModifier = false
+window.addEventListener('keydown', e => { if (e.code === 'Backquote') _progModifier = true }, true)
+window.addEventListener('keyup', e => { if (e.code === 'Backquote') _progModifier = false }, true)
+window.addEventListener('blur', () => { _progModifier = false })
 
 // 键盘监听：扩展快捷键触发
 // キーリスナー：拡張ショートカット発動 // Keyboard listener: extended shortcut trigger
@@ -2149,6 +2200,7 @@ window.addEventListener('keydown', (e) => {
 	const tag = el?.tagName
 	if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
 	if (!stage.current) return
+	if (_progModifier) return  // 进行快捷键修饰键按下时交给进行监听器
 	if (e.ctrlKey && !e.altKey && !e.shiftKey) return  // Ctrl+Z 等交给 keybinds
 	let combo = comboFromEvent(e)
 	let match = _extMap[combo]
@@ -2179,20 +2231,76 @@ window.addEventListener('keydown', (e) => {
 	grid.autoLoop()
 }, true)
 
+// 进行(Prog)操作：按维度区间累进移动当前根音音高
+// 進行(Prog)操作：次元に応じて現在のルート音高を累進移動
+// Prog operation: progressively shift current root pitch by the interval
+function _doProg(intervalKey) {
+	const shift = pitchIntervals[intervalKey]
+	if (!shift || !stage.current) return
+	history.snapshot()
+	const root = stage.current.root || stage.current
+	const interval = root.interval || { n: 1, d: 1 }
+	root.interval = { n: interval.n * shift.n, d: interval.d * shift.d }
+	if ($('#rootmenu').style.top !== '') {
+		$('#rootmenu').style.top = root.pitchline.absolutePosition().y + 'px'
+		$('#roothz').innerText = root.hz.toFixed(1)
+		$('#roottav').innerText = root.tav
+	}
+	rootlayer.batchDraw()
+	grid.autoLoop()
+}
+
+// 键盘监听：进行快捷键触发（` + 数字 = 上，Alt + ` + 数字 = 下）
+// キーリスナー：進行ショートカット発動（` + 数字 = 上、Alt + ` + 数字 = 下）
+// Keyboard listener: prog shortcut trigger (` + digit = up, Alt + ` + digit = down)
+window.addEventListener('keydown', (e) => {
+	if (!_progModifier) return
+	const el = document.activeElement
+	const tag = el?.tagName
+	if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+	if (!stage.current) return
+	if (['Backquote','AltLeft','AltRight','ControlLeft','ControlRight','ShiftLeft','ShiftRight','MetaLeft','MetaRight','Tab','Escape'].includes(e.code)) return
+	const mods = []
+	if (e.altKey) mods.push('Alt')
+	mods.push('Backquote')
+	const combo = mods.concat(e.code).join('+')
+	const match = _progMap[combo]
+	if (!match) return
+	const key = match.dimKey
+	const intervalKey = match.alt ? '-' + key : key
+	if (!pitchIntervals[intervalKey]) return
+	e.preventDefault(); e.stopPropagation()
+	_doProg(intervalKey)
+}, true)
+
 // 渲染弹窗中的扩展快捷键显示（按维度枚举，而非固定0-9）
 // ポップアップ内の拡張ショートカット表示をレンダリング（固定 0-9 ではなく次元ごとに列挙）
 // Render extended shortcut display in popup (enumerate by dimension, not fixed 0-9)
+
+// 扩展快捷键显示列数 / 最大高度（如需更宽/更窄或更高/更矮，改这两个值即可）
+// 拡張ショートカット表示の列数 / 最大高さ（幅や高さを調整する場合はこの2つの値を変更）
+// Columns / max-height of the shortcut box (adjust these two values to change layout)
+const EXT_SC_COLS = 7
+const EXT_SC_MAX_H = 160
+
 function renderExtShortcuts(prefix) {
 	const upRow = document.getElementById(prefix + 'ext-shortcuts-up')
 	const downRow = document.getElementById(prefix + 'ext-shortcuts-down')
 	if (!upRow || !downRow) return
-	// 收集所有需要展示的维度
+	// 收集需要展示的维度（跳过被禁用/取消选中的维度）
+	// 表示する次元を収集（無効化・選択解除された次元はスキップ）
+	// Collect dimensions to show (skip disabled/deselected dimensions)
 	const dims = []  // [{ key, label, color }]
 	const builtin = ['0d','1d','2d','3d','4d','5d','6d','7d']
 	for (const k of builtin) {
-		if (pitchIntervals[k]) dims.push({ key: k, label: k, color: pitchIntervals[k].c })
+		if (!pitchIntervals[k]) continue
+		// 6d/7d 受“高维度”开关控制 // 6d/7d は「高次元」スイッチで制御
+		if (k === '6d' && !$('#config-enable-6d')?.checked) continue
+		if (k === '7d' && !$('#config-enable-7d')?.checked) continue
+		dims.push({ key: k, label: k, color: pitchIntervals[k].c })
 	}
 	for (let i = 0; i < customDimList.length; i++) {
+		if (customDimList[i].enabled === false) continue  // 自定义维度被取消选中时隐藏
 		const pi = pitchIntervals['c' + i]
 		if (pi) dims.push({ key: 'c' + i, label: pi.n + '/' + pi.d, color: pi.c })
 	}
@@ -2201,11 +2309,14 @@ function renderExtShortcuts(prefix) {
 		const sc = extShortcuts[d.key] || { up: '', down: '' }
 		const upShow = sc.up ? comboLabel(sc.up) : t('custom')
 		const downShow = sc.down ? comboLabel(sc.down) : t('custom')
-		upHTML += `<span class="sc-item" data-dim="${d.key}" data-dir="up" title="${d.label} ↑ ${sc.up || '无'}" style="color:${d.color};font-size:11px;margin:0 3px;cursor:pointer;display:inline-block;padding:1px 4px;border-radius:3px;">${upShow}</span>`
-		downHTML += `<span class="sc-item" data-dim="${d.key}" data-dir="down" title="${d.label} ↓ ${sc.down || '无'}" style="color:${d.color};font-size:11px;margin:0 3px;cursor:pointer;display:inline-block;padding:1px 4px;border-radius:3px;">${downShow}</span>`
+		upHTML += `<span class="sc-item" data-dim="${d.key}" data-dir="up" title="${d.label} ↑ ${sc.up || '无'}" style="color:${d.color};font-size:11px;cursor:pointer;display:block;text-align:center;padding:2px 0;border-radius:3px;">${upShow}</span>`
+		downHTML += `<span class="sc-item" data-dim="${d.key}" data-dir="down" title="${d.label} ↓ ${sc.down || '无'}" style="color:${d.color};font-size:11px;cursor:pointer;display:block;text-align:center;padding:2px 0;border-radius:3px;">${downShow}</span>`
 	}
-	upRow.innerHTML = '<span style="color:#888;font-size:10px;">↑ </span>' + upHTML
-	downRow.innerHTML = '<span style="color:#888;font-size:10px;">↓ </span>' + downHTML
+	const gridBox = (html) => `<div style="display:grid;grid-template-columns:repeat(${EXT_SC_COLS},1fr);gap:2px;max-height:${EXT_SC_MAX_H}px;overflow-y:auto;overflow-x:hidden;background:#1a1a2e;border:1px solid #555;border-radius:4px;padding:4px;">${html}</div>`
+	upRow.style.display = 'block'
+	downRow.style.display = 'block'
+	upRow.innerHTML = '<span style="color:#888;font-size:10px;display:block;margin:0 0 2px;">↑</span>' + gridBox(upHTML)
+	downRow.innerHTML = '<span style="color:#888;font-size:10px;display:block;margin:0 0 2px;">↓</span>' + gridBox(downHTML)
 	for (const el of document.querySelectorAll('.sc-item')) {
 		el.onclick = function() { openShortcutCapture(this.dataset.dim, this.dataset.dir) }
 	}
@@ -2388,6 +2499,301 @@ if (localStorage.getItem('naf_root_mark') === '0') {
 		if (n.mark) n.mark.visible(false)
 	}
 }
+
+// ==================== 小节视图（Bar View） ====================
+// ==================== バービュー ====================
+// ==================== Bar View ====================
+
+// 收集所有小节线（|）的 X 坐标（已按拍吸附）
+function _getBarLines() {
+	return (window._staffDirectives || [])
+		.filter(d => d.type === 'bar')
+		.map(d => d.x)
+		.sort((a, b) => a - b)
+}
+
+// 进入小节视图：按小节快照组装音符，纯视觉重排，不影响原谱数据
+function _barDirectives() {
+	return (window._staffDirectives || []).filter(d => d.type === 'bar').sort((a, b) => a.x - b.x)
+}
+function _serializeRoots(roots) {
+	return roots.map(r => Serializer.root2json(r))
+}
+function _notesSerialize() {
+	return JSON.stringify(rootlayer.children.map(x => Serializer.root2json(x)))
+}
+function _addRootsFromJson(arr) {
+	const hzDiv = 256
+	for (const n of arr) {
+		const p = new RootNote(stage, (n.x || 0) / 4, hz2y((n.h || 0) / hzDiv), (n.l || 48) / 4, (n.h || 0) / hzDiv, null, n.tk)
+		p.mute = n.m || false
+		p.volume = 50 + (n.v || 0)
+		p._pitchThick = n.pt || p._pitchThick
+		p._linkThick = n.lt || p._linkThick
+		p._linkOpacity = n.lo || p._linkOpacity
+		p._noteOpacity = n.no ?? p._noteOpacity
+		p._tick = n.tk || p._tick
+		p.pitchline.strokeWidth(p._pitchThick)
+		p.pitchline.opacity(p._noteOpacity)
+		if (p.mark) p.mark.opacity(p._noteOpacity)
+		p.hidden = !!(n.hd)
+		if (p._linkThick !== 1 || p._linkOpacity !== 1) p.applyLinkStyle()
+		rootlayer.add(p)
+		for (const m of (n.s || [])) {
+			Serializer.json2sub(p, m, hzDiv)
+		}
+	}
+}
+function _notesDeserialize(json) {
+	rootlayer.destroyChildren()
+	stage.current = null
+	if (window._sel) { window._sel.selected.clear(); window._sel._groupRef = null }
+	let arr
+	try { arr = JSON.parse(json) } catch (e) { arr = null }
+	if (!Array.isArray(arr)) { rootlayer.draw(); return }
+	_addRootsFromJson(arr)
+	rootlayer.draw()
+}
+
+// 把当前音符重新排入已有小节槽位（撤销后重排复用）
+function _relayoutBarView() {
+	const bars = window._barViewData?.bars
+	if (!bars || !bars.length) return
+	const roots = rootlayer.getChildren()
+	for (const r of roots) {
+		const timeX0 = r._timeX ?? r.x()
+		const timeLen = r._timeLen ?? r.len
+		// 抵消序列化 round 误差：若非常接近某小节左边界，吸附到该边界，避免撤销后落入左侧小节
+		let timeX = timeX0
+		for (let i = 0; i < bars.length; i++) {
+			if (Math.abs(timeX0 - bars[i].oStart) <= 1) { timeX = bars[i].oStart; break }
+		}
+		let bi = bars.length - 1
+		for (let i = 0; i < bars.length; i++) {
+			if (timeX >= bars[i].oStart && timeX < bars[i].oEnd) { bi = i; break }
+		}
+		r._timeX = timeX
+		r._timeLen = timeLen
+		r.x(bars[bi].vStart + BAR_VIEW_PAD)
+		r.len = 48
+		for (const s of r.getDescendants()) {
+			if (s.linkLine) {
+				s.pitchline.draggable(false)
+				s.linkLine.draggable(false)
+			}
+		}
+	}
+	// 隐藏谱表符号文字（撤销后文字对象被重建，需重新隐藏）
+	const staffTexts = []
+	for (const t of (window._textSel?.all || [])) {
+		if (t._staffDirective) {
+			t.konva.visible(false)
+			t.html.style.display = 'none'
+			staffTexts.push(t)
+		}
+	}
+	if (window._barViewData) window._barViewData.staffTexts = staffTexts
+	rootlayer.batchDraw()
+}
+window._relayoutBarView = _relayoutBarView
+
+function _enterBarView() {
+	if (window._barView) return
+	const barDirs = _barDirectives()
+	const barLines = barDirs.map(d => d.x)
+	const roots = rootlayer.getChildren()
+	let minX = Infinity, maxX = -Infinity
+	for (const r of roots) {
+		minX = Math.min(minX, r.x())
+		maxX = Math.max(maxX, r.x() + r.len)
+	}
+	if (!isFinite(minX)) { minX = 0; maxX = BAR_VIEW_SLOT }
+	const startPx = minX - 48
+	const lastBar = barLines.length ? barLines[barLines.length - 1] : 0
+	const endPx = Math.max(maxX, lastBar) + 48
+
+	// 小节边界：[起点, ...小节线, 终点]
+	const bounds = [startPx]
+	for (const b of barLines) {
+		if (b > startPx && b < endPx) bounds.push(b)
+	}
+	bounds.push(endPx)
+
+	const bars = []
+	for (let i = 0; i < bounds.length - 1; i++) {
+		bars.push({ oStart: bounds[i], oEnd: bounds[i + 1], vStart: startPx + i * BAR_VIEW_SLOT, slotW: BAR_VIEW_SLOT })
+	}
+
+	// 隔离撤销历史：保存原谱历史并清空，让 x 视图内的撤销只作用于 x 视图
+	window._barViewSavedHistory = history.history.slice()
+	history.history.length = 0
+	window._barViewOrigNotes = _notesSerialize()
+	window._barViewOrigPlaybackData = window._collectPlaybackNotes?.(rootlayer.getChildren())
+
+	// 按小节组装 x 视图音符：有快照用快照，无快照用实时并生成快照
+	const xNotes = []
+	for (let i = 0; i < bars.length; i++) {
+		const bar = bars[i]
+		const barDir = (i < barDirs.length) ? barDirs[i] : null
+		const leftKey = (i === 0) ? 'start' : String(barLines[i - 1])
+		const inBar = roots.filter(r => r.x() >= bar.oStart && r.x() < bar.oEnd)
+		const snap = barDir?.textNote?._barSnapshot
+		if (snap && snap.leftKey === leftKey) {
+			xNotes.push(...(snap.notes || []))
+		} else {
+			const notes = _serializeRoots(inBar)
+			if (barDir && barDir.textNote) barDir.textNote._barSnapshot = { notes, leftKey }
+			xNotes.push(...notes)
+		}
+	}
+
+	// 替换 rootlayer 为 x 视图音符
+	rootlayer.destroyChildren()
+	stage.current = null
+	if (window._sel) { window._sel.selected.clear(); window._sel._groupRef = null }
+	_addRootsFromJson(xNotes)
+
+	// 隐藏竖谱线与循环箭头
+	grid.beatlines.visible(false)
+	grid.loopStart.visible(false)
+	grid.loopEnd.visible(false)
+
+	window._barViewData = { bars }
+	window._barView = true
+	// 纯视觉重排：把音符移动到小节槽位（1拍分辨率 + 相同起始）
+	_relayoutBarView()
+	// 记录 x 视图初始快照（撤销最多撤到这里，不会越过到原谱历史）
+	history.snapshot()
+	// 播放线映射：transport ticks → 视图 X（按各小节真实时长分段线性映射，形成时快时慢）
+	window._barViewX = function(ticks) {
+		const px = t2x(ticks - OFFSET)
+		const b = window._barViewData?.bars || []
+		if (!b.length) return px
+		if (px < b[0].oStart) return b[0].vStart
+		for (let i = 0; i < b.length; i++) {
+			if (px >= b[i].oStart && px < b[i].oEnd) {
+				return b[i].vStart + (px - b[i].oStart) / (b[i].oEnd - b[i].oStart) * b[i].slotW
+			}
+		}
+		const last = b[b.length - 1]
+		return last.vStart + last.slotW
+	}
+	// 反向映射：视图 X → transport ticks（卷帘模式暂停后拖动画面时重算位置）
+	window._barViewTicks = function(viewX) {
+		const b = window._barViewData?.bars || []
+		if (!b.length) return x2t(viewX) + OFFSET
+		if (viewX < b[0].vStart) return x2t(b[0].oStart) + OFFSET
+		for (let i = 0; i < b.length; i++) {
+			const vEnd = b[i].vStart + b[i].slotW
+			if (viewX >= b[i].vStart && viewX < vEnd) {
+				const px = b[i].oStart + (viewX - b[i].vStart) / b[i].slotW * (b[i].oEnd - b[i].oStart)
+				return x2t(px) + OFFSET
+			}
+		}
+		const last = b[b.length - 1]
+		return x2t(last.oEnd) + OFFSET
+	}
+	grid.fixArrowScale()
+	grid.adjust()
+	rootlayer.batchDraw()
+}
+
+// 退出小节视图：精确还原原始位置与状态
+function _exitBarView() {
+	if (!window._barView) return
+	const d = window._barViewData
+	const bars = d?.bars || []
+	const barDirs = _barDirectives()
+	const barLines = barDirs.map(x => x.x)
+
+	// 按小节保存快照：把 x 视图音符按 _timeX 分组，序列化存回对应小节号
+	for (let i = 0; i < bars.length; i++) {
+		const bar = bars[i]
+		const barDir = (i < barDirs.length) ? barDirs[i] : null
+		if (!barDir || !barDir.textNote) continue
+		const leftKey = (i === 0) ? 'start' : String(barLines[i - 1])
+		const inBar = rootlayer.getChildren().filter(r => (r._timeX ?? r.x()) >= bar.oStart && (r._timeX ?? r.x()) < bar.oEnd)
+		barDir.textNote._barSnapshot = { notes: _serializeRoots(inBar), leftKey }
+	}
+
+	// 恢复原谱
+	_notesDeserialize(window._barViewOrigNotes)
+	window._barViewOrigPlaybackData = null
+	// 恢复原谱撤销历史（丢弃 x 视图期间的撤销记录）
+	history.history = window._barViewSavedHistory || []
+	window._barViewSavedHistory = null
+
+	// 恢复谱表符号文字显示
+	if (d) {
+		for (const t of d.staffTexts) {
+			if (!t || !t.konva || !t.html) continue
+			t.konva.visible(true)
+			t.html.style.display = ''
+		}
+	}
+	grid.beatlines.visible(true)
+	grid.loopStart.visible(true)
+	grid.loopEnd.visible(true)
+	window._barViewData = null
+	window._barView = false
+	window._barViewX = null
+	window._barViewTicks = null
+	grid.fixArrowScale()
+	grid.adjust()
+	grid.autoLoop()
+	rootlayer.batchDraw()
+}
+
+// X 键：切换小节视图
+document.addEventListener('keydown', e => {
+	if (e.key === 'x' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		const el = document.activeElement
+		const tag = el?.tagName
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+		if ($('#overlay').style.visibility === 'visible') return
+		e.preventDefault()
+		if (window._barView) _exitBarView()
+		else _enterBarView()
+	}
+})
+
+// 在每个一拍末尾自动标记小节号（|）
+function _addBarMarksEveryBeat() {
+	const roots = rootlayer.getChildren()
+	if (!roots.length) return
+	let minX = Infinity, maxX = -Infinity, minY = Infinity
+	for (const r of roots) {
+		minX = Math.min(minX, r.x())
+		maxX = Math.max(maxX, r.x() + r.len)
+		minY = Math.min(minY, r.y())
+	}
+	if (!isFinite(minX)) return
+	const beatPx = 48
+	const first = Math.ceil(minX / beatPx) * beatPx
+	history.snapshot()
+	const y = minY - 60
+	for (let x = first; x <= maxX; x += beatPx) {
+		const t = new window._TextNote('|', x, y, { fontFamily: 'LapisiaA', fontSize: 30 })
+		window._textlayer.add(t.konva)
+		window._textSel.all.add(t)
+	}
+	window._textlayer.draw()
+	window._parseStaff?.()
+}
+
+// M 键：在每个一拍末尾自动标记小节号
+document.addEventListener('keydown', e => {
+	if (e.key === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+		const el = document.activeElement
+		const tag = el?.tagName
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+		if ($('#overlay').style.visibility === 'visible') return
+		if ($('#text-edit-modal').style.display === 'flex') return
+		if (window._barView) return
+		e.preventDefault()
+		_addBarMarksEveryBeat()
+	}
+})
 
 // === Ctrl+滚轮缩放（取代浏览器缩放，保证网格正常渲染） ===
 // === Ctrl+ホイールズーム（ブラウザズームを置き換え、グリッドの正常レンダリングを保証） ===
